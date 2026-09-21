@@ -2,16 +2,41 @@ import asyncio
 import json
 import logging
 import os
+import re
+import socket
+import uuid
 from pathlib import Path
 
 import aiohttp
+import folder_paths
 import yaml
 from aiohttp import web
 
+from comfy.cli_args import args
 from server import PromptServer
 
+from .anima_pose_control import NODE_CLASS_MAPPINGS as POSE_NODE_CLASS_MAPPINGS
+from .anima_pose_control import NODE_DISPLAY_NAME_MAPPINGS as POSE_NODE_DISPLAY_NAME_MAPPINGS
+from .scene_nodes import NODE_CLASS_MAPPINGS as SCENE_NODE_CLASS_MAPPINGS
+from .scene_nodes import NODE_DISPLAY_NAME_MAPPINGS as SCENE_NODE_DISPLAY_NAME_MAPPINGS
+from .sam_cutout import create_sam_cutout, normalize_cutout_bbox
+from . import interrogate
+from .agent import install_agent
+from .agent_generation import build_generation
 
-LAUNCHER_ROOT = Path(__file__).resolve().parents[2] / "web" / "launcher"
+
+NODE_CLASS_MAPPINGS = {**SCENE_NODE_CLASS_MAPPINGS, **POSE_NODE_CLASS_MAPPINGS}
+NODE_DISPLAY_NAME_MAPPINGS = {**SCENE_NODE_DISPLAY_NAME_MAPPINGS, **POSE_NODE_DISPLAY_NAME_MAPPINGS}
+
+
+def launcher_root():
+    bundled = Path(__file__).resolve().parent / "web"
+    if (bundled / "index.html").is_file():
+        return bundled
+    return Path(__file__).resolve().parents[2] / "web" / "launcher"
+
+
+LAUNCHER_ROOT = launcher_root()
 
 # Machine-local AI settings, stored as YAML next to the ComfyUI installation
 # (created automatically on first load). The file is gitignored; empty fields
@@ -26,6 +51,8 @@ DEFAULT_AI_CONFIG = {
     "model": "deepseek-v4-pro",
     "api_base": "https://api.deepseek.com",
 }
+
+SAM_CUTOUT_LOCK = asyncio.Lock()
 
 
 def load_ai_config():
@@ -70,6 +97,59 @@ def server_api_key():
     return api_key
 
 
+def _lan_ips():
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                ips.add(ip)
+    except OSError:
+        pass
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # No packets are sent; getsockname() reveals the route source IP.
+            probe.connect(("192.0.2.1", 80))
+            ip = probe.getsockname()[0]
+            if ip and not ip.startswith("127.") and ip not in ips:
+                ips.add(ip)
+        finally:
+            probe.close()
+    except OSError:
+        pass
+    return sorted(ips)
+
+
+@PromptServer.instance.routes.get("/launcher/discover")
+async def get_launcher_discover(request):
+    """Handshake endpoint used by the mobile app's LAN scanner to confirm a
+    host runs Comfy Studio and to learn its address before auto-connecting."""
+    challenge = request.query.get("challenge", "")
+    if challenge and not re.fullmatch(r"[a-f0-9]{32}", challenge):
+        return web.json_response({"error": "Invalid discovery challenge"}, status=400)
+    return web.json_response(
+        {
+            "app": "comfy-studio",
+            "protocol": 1,
+            "challenge": challenge,
+            "name": socket.gethostname(),
+            "port": args.port,
+            "addresses": _lan_ips(),
+        }
+    )
+
+
+try:
+    from .discovery import install_discovery
+except ModuleNotFoundError as error:
+    if error.name != "zeroconf":
+        raise
+    logging.warning("Install aki_launcher/requirements.txt to enable LAN discovery.")
+else:
+    install_discovery(PromptServer.instance, args, _lan_ips)
+
+
 @PromptServer.instance.routes.get("/launcher")
 async def get_launcher(request):
     response = web.FileResponse(LAUNCHER_ROOT / "index.html")
@@ -86,7 +166,10 @@ async def get_launcher_asset(request):
         return web.Response(status=403)
     if not asset_path.is_file():
         return web.Response(status=404)
-    return web.FileResponse(asset_path)
+    response = web.FileResponse(asset_path)
+    response.headers["Cache-Control"] = "no-store, must-revalidate"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @PromptServer.instance.routes.get("/launcher/presets")
@@ -114,6 +197,54 @@ async def save_presets(request):
         return web.json_response({"ok": True, "count": len(presets)})
     except (json.JSONDecodeError, TypeError, ValueError) as error:
         return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.post("/launcher/scene/cutout")
+async def create_launcher_scene_cutout(request):
+    if request.content_length and request.content_length > 1024 * 1024:
+        return web.json_response({"error": "Cutout request is too large"}, status=413)
+    try:
+        body = await request.json()
+        image = body.get("image")
+        if not isinstance(image, dict) or image.get("type", "input") != "input":
+            raise ValueError("Cutout source must be a ComfyUI input image")
+        filename = str(image.get("filename", "")).strip()
+        subfolder = str(image.get("subfolder", "")).strip()
+        if not filename or Path(filename).name != filename:
+            raise ValueError("Invalid source filename")
+        bbox = normalize_cutout_bbox(body.get("bbox"))
+        feather = min(16.0, max(0.0, float(body.get("feather", 2.0))))
+
+        input_root = Path(folder_paths.get_input_directory()).resolve()
+        source_path = (input_root / subfolder / filename).resolve()
+        if not source_path.is_relative_to(input_root):
+            raise ValueError("Invalid source path")
+        if not source_path.is_file():
+            return web.json_response({"error": "Source image was not found"}, status=404)
+
+        checkpoint = Path(folder_paths.models_dir) / "sams" / "sam_vit_b_01ec64.pth"
+        output_subfolder = Path("comfy_studio_scenes") / "cutouts"
+        output_folder = input_root / output_subfolder
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(filename).stem)[:64] or "scene-object"
+        output_name = f"{stem}-cutout-{uuid.uuid4().hex[:8]}.png"
+        output_path = output_folder / output_name
+        async with SAM_CUTOUT_LOCK:
+            result = await asyncio.to_thread(create_sam_cutout, source_path, checkpoint, bbox, feather, output_path)
+        return web.json_response(
+            {
+                "filename": output_name,
+                "subfolder": output_subfolder.as_posix(),
+                "type": "input",
+                **result,
+            }
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except FileNotFoundError as error:
+        return web.json_response({"error": str(error)}, status=503)
+    except RuntimeError as error:
+        logging.warning("[Scene Cutout] SAM failed: %s", error)
+        return web.json_response({"error": str(error)}, status=500)
 
 
 @PromptServer.instance.routes.get("/launcher/ai/config")
@@ -234,10 +365,9 @@ async def launcher_ai_chat(request):
         return web.json_response({"error": "AI provider is unavailable"}, status=502)
 
 
+install_agent(PromptServer.instance.routes, load_ai_config, server_api_key, build_generation, args.port)
+
+
 @PromptServer.instance.routes.get("/ai-chat")
 async def get_ai_chat(request):
     raise web.HTTPFound("/launcher#ai")
-
-
-NODE_CLASS_MAPPINGS = {}
-

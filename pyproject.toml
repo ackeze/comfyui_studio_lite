@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-studio-lite"
+description = "Comfy Studio Lite: LAN studio for Anima generation, scene layout, pose, reverse prompting and an agent."
+version = "0.1.0"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["zeroconf>=0.132,<1"]
+
+[project.urls]
+Repository = "https://github.com/ackeze/comfyui_studio_lite"
+
+[tool.comfy]
+PublisherId = "ackeze"
+DisplayName = "Comfy Studio Lite"
+Icon = ""

@@ -1,6 +1,6 @@
 {
   "appId": "com.comfyui.lite",
-  "appName": "ComfyUI Lite",
+  "appName": "Comfy Studio Lite",
   "webDir": "web",
   "server": {
     "androidScheme": "http",

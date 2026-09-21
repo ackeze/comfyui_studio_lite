@@ -1,19 +1,12 @@
 __pycache__/
 *.py[cod]
-
-# Local secrets and user data (never commit)
-/custom_nodes/aki_launcher/ai_key.txt
-/comfy_studio.yaml
-/comfy_studio.yaml.tmp
-/web/launcher/presets.json
-
-# Mobile app build artifacts and machine-specific files
-/mobile-app/node_modules/
-/mobile-app/.idea/
-/mobile-app/android/.gradle/
-/mobile-app/android/build/
-/mobile-app/android/app/build/
-/mobile-app/android/local.properties
-
-/.cache/
+*.part
+web/presets.json
+ai_key.txt
+mobile-app/node_modules/
+mobile-app/.idea/
+mobile-app/android/.gradle/
+mobile-app/android/build/
+mobile-app/android/app/build/
+mobile-app/android/local.properties
 .DS_Store

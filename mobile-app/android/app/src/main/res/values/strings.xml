@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ComfyUI Lite</string>
-    <string name="title_activity_main">ComfyUI Lite</string>
+    <string name="app_name">Comfy Studio Lite</string>
+    <string name="title_activity_main">Comfy Studio Lite</string>
     <string name="package_name">com.comfyui.lite</string>
     <string name="custom_url_scheme">com.comfyui.lite</string>
 </resources>

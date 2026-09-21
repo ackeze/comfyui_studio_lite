@@ -1,0 +1,95 @@
+{
+  "resources": [
+    {
+      "id": "anima-unet",
+      "group": "required",
+      "title": "Anima Base UNET",
+      "folder": "diffusion_models",
+      "search": ["diffusion_models", "unet"],
+      "name": "anima-base-v1.0.safetensors",
+      "match": "contains",
+      "contains": "anima",
+      "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors",
+      "size": 4182218328
+    },
+    {
+      "id": "anima-clip",
+      "group": "required",
+      "title": "Qwen3 0.6B 文本编码器",
+      "folder": "text_encoders",
+      "search": ["text_encoders", "clip"],
+      "name": "qwen_3_06b_base.safetensors",
+      "match": "prefix",
+      "prefix": "qwen_3_06b_base",
+      "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors",
+      "size": 1192135096
+    },
+    {
+      "id": "anima-vae",
+      "group": "required",
+      "title": "Qwen Image VAE",
+      "folder": "vae",
+      "search": ["vae"],
+      "name": "qwen_image_vae.safetensors",
+      "match": "prefix",
+      "prefix": "qwen_image_vae",
+      "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+      "size": 253806246
+    },
+    {
+      "id": "pose-preview2",
+      "group": "recommended",
+      "title": "Anima Pose Preview-2",
+      "folder": "loras",
+      "search": ["loras"],
+      "name": "anima_pose_preview2.safetensors",
+      "match": "name",
+      "url": "https://huggingface.co/Claquasse/Anima-Control-Pose/resolve/main/anima_pose_preview2.safetensors",
+      "size": 75051096
+    },
+    {
+      "id": "lllite-any",
+      "group": "recommended",
+      "title": "Anima LLLite Any v2",
+      "folder": "model_patches",
+      "search": ["model_patches", "controlnet"],
+      "name": "anima-lllite-any-test-like-v2.safetensors",
+      "match": "name",
+      "url": "https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-any-test-like-v2.safetensors",
+      "size": 16403008
+    },
+    {
+      "id": "lllite-inpaint",
+      "group": "recommended",
+      "title": "Anima LLLite Inpainting v2",
+      "folder": "model_patches",
+      "search": ["model_patches", "controlnet"],
+      "name": "anima-lllite-inpainting-v2.safetensors",
+      "match": "name",
+      "url": "https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-inpainting-v2.safetensors",
+      "size": 65772872
+    },
+    {
+      "id": "lllite-pose",
+      "group": "recommended",
+      "title": "Anima LLLite Pose",
+      "folder": "model_patches",
+      "search": ["model_patches", "controlnet"],
+      "name": "anima-lllite-pose-1.safetensors",
+      "match": "name",
+      "url": "https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-pose-1.safetensors",
+      "size": 23310040
+    },
+    {
+      "id": "sam-vit-b",
+      "group": "recommended",
+      "title": "SAM ViT-B 抠图",
+      "folder": "sams",
+      "search": ["sams"],
+      "name": "sam_vit_b_01ec64.pth",
+      "match": "name",
+      "url": "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/sams/sam_vit_b_01ec64.pth",
+      "size": 375042383
+    }
+  ]
+}

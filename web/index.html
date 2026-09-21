@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f3ef">
+  <title>Comfy Studio Lite</title>
+  <script>
+    if (new URLSearchParams(location.search).get('embedded') === '1') document.documentElement.classList.add('embedded');
+    try {
+      const storedTheme = localStorage.getItem('comfy_studio_theme_v1');
+      const preference = storedTheme ? JSON.parse(storedTheme) : 'system';
+      const dark = preference === 'dark' || (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.querySelector('meta[name="theme-color"]').content = dark ? '#111213' : '#f4f3ef';
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="/api/launcher/assets/css/launcher.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Comfy Studio Lite">
+        <span class="brand-mark"><span></span></span>
+        <div>
+          <strong>Comfy Studio Lite</strong>
+          <small>个人创作工作室</small>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="status-pill" id="connectionButton" type="button">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">正在连接</span>
+        </button>
+        <button class="icon-button" id="openSettings" type="button" aria-label="打开设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.86 1.86-.06-.06A1.7 1.7 0 0 0 16 18.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V20h-2.6v-.08A1.7 1.7 0 0 0 11 18.4a1.7 1.7 0 0 0-1.88.34l-.06.06-1.86-1.86.06-.06A1.7 1.7 0 0 0 7.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H5.8V11h.08A1.7 1.7 0 0 0 7.6 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06L9.06 6.2l.06.06A1.7 1.7 0 0 0 11 6.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V4.8H15v.08A1.7 1.7 0 0 0 16 6.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 1.86 1.86-.06.06A1.7 1.7 0 0 0 19.4 10c.15.4.36.73.65.98.3.25.66.38 1.05.4h.1V14h-.08c-.4.02-.77.15-1.07.4-.3.25-.51.58-.65.98V15Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="desktop-layout">
+      <main class="main-content">
+        <section class="view active" id="studioView" data-view="studio">
+          <div class="studio-grid">
+            <aside class="task-queue" aria-label="生成队列">
+              <div class="section-heading"><h2>生成队列 <small id="queueCount">0</small></h2></div>
+              <p class="queue-help">按顺序逐张生成 · 等待任务仅保留在本页</p>
+              <div id="queueList"><p class="queue-empty">还没有任务</p></div>
+            </aside>
+            <section class="stage-card surface">
+              <div class="stage-head">
+                <div>
+                  <span class="eyebrow">LIVE CANVAS</span>
+                  <h1>创作画布</h1>
+                </div>
+                <span class="gpu-pill" id="gpuText">GPU 检测中</span>
+              </div>
+
+              <div class="canvas" id="canvas">
+                <div class="canvas-placeholder" id="canvasPlaceholder">
+                  <div class="placeholder-orbit"><span></span></div>
+                  <strong>让想象开始成形</strong>
+                  <p>编辑提示词，然后开始生成</p>
+                </div>
+                <img id="resultImage" alt="生成结果">
+                <canvas id="poseOverlayCanvas" class="pose-overlay-canvas" aria-label="画布 Pose 骨架叠加"></canvas>
+                <div class="canvas-actions" id="canvasActions">
+                  <button class="canvas-button" id="viewImage" type="button" aria-label="查看大图">
+                    <svg viewBox="0 0 24 24"><path d="m9 3-6 6m0-6v6h6M15 21l6-6m0 6v-6h-6"/></svg>
+                  </button>
+                  <a class="canvas-button" id="downloadImage" aria-label="下载图片" download>
+                    <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14"/></svg>
+                  </a>
+                </div>
+              </div>
+
+              <div class="progress-overlay" id="progressOverlay" role="status" aria-live="polite">
+                <div class="progress-copy"><span id="progressLabel">准备生成</span><strong id="progressPercent">0%</strong></div>
+                <div class="progress-track"><span id="progressFill"></span></div>
+              </div>
+              <div class="result-strip" id="resultStrip" aria-label="本次生成结果"></div>
+            </section>
+
+            <section class="composer-column">
+              <div id="panelResize" role="separator" tabindex="0" aria-label="调整参数栏宽度，左右方向键调整" aria-orientation="vertical" aria-valuemin="300" aria-valuemax="560" aria-valuenow="348"></div>
+              <button class="prompt-card surface" id="openPrompt" type="button">
+                <span class="prompt-card-icon">
+                  <svg viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg>
+                </span>
+                <span class="prompt-card-copy">
+                  <span class="eyebrow">PROMPT</span>
+                  <strong id="promptTitle">描述你想生成的画面</strong>
+                  <span id="promptPreview">点击编辑提示词，或让 AI 帮你构思</span>
+                </span>
+                <span class="prompt-arrow">›</span>
+              </button>
+
+              <label class="studio-prompt-label" for="studioPrompt">画面描述</label>
+              <textarea id="studioPrompt" class="studio-prompt" rows="5" placeholder="描述主体、环境与氛围…"></textarea>
+              <button class="text-button" data-open-artists type="button">画师参考 · Animadex</button>
+
+              <div class="quick-panel surface">
+                <div class="section-heading">
+                  <div><span class="eyebrow">QUICK CONTROL</span><h2>快速参数</h2></div>
+                  <button class="text-button" id="openAllParams" type="button">全部参数</button>
+                </div>
+                <div class="quick-grid">
+                  <button class="lora-summary model-summary surface" type="button" data-open-tab="model">
+                    <span class="summary-icon">M</span>
+                    <span class="summary-copy"><small>基础模型</small><strong id="quickModel">加载中</strong></span>
+                    <span class="summary-arrow">切换 ›</span>
+                  </button>
+                  <button class="quick-card" type="button" data-open-tab="basic">
+                    <span>画幅</span><strong id="quickSize">3:4</strong><small id="quickPixels">768 × 1024</small>
+                  </button>
+                  <button class="quick-card" type="button" data-open-tab="basic">
+                    <span>采样</span><strong id="quickSteps">30 Steps</strong><small id="quickCfg">CFG 5.0</small>
+                  </button>
+                </div>
+              </div>
+
+              <button class="lora-summary surface" type="button" data-open-tab="lora">
+                <span class="summary-icon">L</span>
+                <span><small>LoRA STACK</small><strong id="loraSummary">未启用 LoRA</strong></span>
+                <span class="summary-arrow">管理 ›</span>
+              </button>
+
+              <section class="pose-control-panel surface" id="poseControlPanel">
+                <div class="section-heading pose-heading">
+                  <div><span class="eyebrow">GENERATION MODE</span><h2>绘图控制</h2></div>
+                  <span class="pose-model-state" id="poseModelState">检测模型中</span>
+                </div>
+                <div class="segmented pose-mode-switch" id="poseModeSelector">
+                  <button class="active" type="button" data-pose-mode="normal">普通生成</button>
+                  <button type="button" data-pose-mode="img2img">图生图</button>
+                  <button type="button" data-pose-mode="pose">Pose 控制</button>
+                </div>
+                <div id="img2imgEditor" hidden>
+                  <div class="field-group">
+                    <div class="segmented" aria-label="重绘模式">
+                      <button type="button" data-repair-mode="normal">普通重绘</button>
+                      <button type="button" data-repair-mode="local">局部修复</button>
+                    </div>
+                    <div id="repairParts" class="repair-parts" hidden>
+                      <label><input type="checkbox" value="body" data-repair-part>身体</label>
+                      <label><input type="checkbox" value="head" data-repair-part>头部</label>
+                      <label><input type="checkbox" value="hands" data-repair-part>手部</label>
+                    </div>
+                    <p id="repairHint" class="pose-strategy-hint" hidden>自动检测选定部位，局部重绘后贴回输入图。输入沿用图生图长边≤1024规则。固定提示词、CFG 4、重绘强度 0.5；身体 40 步，头部和手部 30 步，不读取画面描述或普通采样参数。保留当前模型与 LoRA；未检测到目标时返回输入图。</p>
+                  </div>
+                  <div class="pose-control-title"><button class="secondary-button" id="uploadImg2img" type="button">上传参考图</button><button class="text-button" id="useResultImg2img" type="button">使用当前图</button><button class="text-button" id="clearImg2img" type="button">清除</button></div>
+                  <input id="img2imgFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                  <div id="img2imgDrop" class="img2img-drop"><img id="img2imgPreview" alt="图生图参考图" hidden><p id="img2imgInfo">拖入 PNG、JPEG 或 WebP，或点击上传参考图</p></div>
+                  <label class="range-field"><span>重绘强度 <output id="img2imgDenoiseValue">0.45</output></span><input id="img2imgDenoise" type="range" min="0.05" max="1" step="0.05" value="0.45"></label>
+                  <p class="pose-strategy-hint">低强度保留原图，高强度改动更多；1.0 会大幅丢失原图内容。按原图比例缩小至长边≤1024，补白对齐16像素，不拉伸、不裁切。输出尺寸由参考图决定，复用现有提示词、LoRA、步数、CFG和种子。</p>
+                </div>
+                <div class="pose-editor" id="poseEditor" hidden>
+                  <div class="pose-control-group">
+                    <div class="pose-control-title"><span>控制方式</span><small>Preview-2 实验模型</small></div>
+                    <div class="segmented pose-strategy-switch" id="poseStrategySelector">
+                      <button class="active" type="button" data-pose-strategy="official">Anima Pose Preview-2</button>
+                    </div>
+                    <p class="pose-strategy-hint" id="poseStrategyHint">R0_thin · CFG ZeroStar · CFG 4 · er_sde / simple</p>
+                  </div>
+                  <div class="pose-control-title"><button class="text-button" id="importPoseJson" type="button">导入姿势 JSON</button><button class="text-button" id="exportPoseJson" type="button">导出姿势 JSON</button><input id="poseJsonFile" type="file" accept=".json,application/json" hidden></div>
+                  <div class="pose-canvas-wrap"><canvas id="poseCanvas" width="360" height="480" aria-label="可拖拽人物骨架编辑器"></canvas><span>拖动关节点改姿势，拖动骨架内部移动整体</span></div>
+                  <div class="pose-overlay-row"><span><strong>骨骼约束</strong><small>拖动手腕、脚踝、肘膝时保持相邻骨长</small></span><button id="poseLockLengths" class="active" type="button" aria-pressed="true">已开启</button></div>
+                  <div class="pose-overlay-row"><span><strong>画布骨架叠加</strong><small>自动适应当前画幅，可直接拖动关节点</small></span><button id="togglePoseOverlay" class="active" type="button" aria-pressed="true">已开启</button></div>
+                  <div class="pose-control-group">
+                    <div class="pose-control-title"><span>姿势模板</span><button class="text-button" id="resetPose" type="button">重置当前</button></div>
+                    <div class="pose-template-grid" id="poseTemplates">
+                      <button class="active" type="button" data-pose-template="standing">站立</button>
+                      <button type="button" data-pose-template="lying">躺下</button>
+                      <button type="button" data-pose-template="sitting">坐姿</button>
+                      <button type="button" data-pose-template="w_sitting">鸭子坐</button>
+                      <button type="button" data-pose-template="one_leg">单腿站立</button>
+                    </div>
+                  </div>
+                  <div class="pose-control-group">
+                    <div class="pose-control-title"><span>表情模板</span><small>通过提示词控制</small></div>
+                    <div class="expression-template-grid" id="expressionTemplates">
+                      <button class="active" type="button" data-expression="happy">开心</button>
+                      <button type="button" data-expression="shy">羞涩</button>
+                      <button type="button" data-expression="afraid">害怕</button>
+                      <button type="button" data-expression="angry">愤怒</button>
+                      <button type="button" data-expression="tsundere">傲娇</button>
+                    </div>
+                  </div>
+                  <label class="field">Pose 背景提示词<textarea id="poseBackgroundPrompt" rows="2" placeholder="描述环境，与人物提示词共同作用于全图">plain white seamless studio background, clean negative space</textarea></label>
+                  <div class="pose-position-grid">
+                    <label class="range-field"><span>水平位置 <output id="posePositionXValue">50%</output></span><input id="posePositionX" type="range" value="0.5" min="0.02" max="0.98" step="0.01"></label>
+                    <label class="range-field"><span>垂直位置 <output id="posePositionYValue">53%</output></span><input id="posePositionY" type="range" value="0.53" min="0.02" max="0.98" step="0.01"></label>
+                  </div>
+                  <label class="range-field pose-scale"><span>人物大小 <output id="poseScaleValue">100%</output></span><input id="poseScale" type="range" value="1" min="0.25" max="2" step="0.05"></label>
+                  <label class="range-field pose-strength"><span>骨架约束 <output id="poseStrengthValue">0.65</output></span><input id="poseStrength" type="range" value="0.65" min="0" max="2" step="0.05"></label>
+                  <div class="pose-generation-grid">
+                    <label class="range-field"><span>采样步数 <output id="poseStepsValue">30</output></span><input id="poseSteps" type="range" value="30" min="10" max="60" step="1"></label>
+                    <label class="range-field"><span>Pose 分辨率 <output id="poseResolutionValue">1024</output></span><input id="poseResolution" type="range" value="1024" min="512" max="1024" step="256"></label>
+                  </div>
+                </div>
+              </section>
+
+              <button class="camera-entry" id="openCamera" type="button">机位控制 <span>打开编辑器 ↗</span></button>
+            <section class="inline-parameters" id="inlineParameters">
+              <div class="section-heading"><h2>生成参数</h2><button class="text-button" type="button" data-open-tab="advanced">高级设置</button></div>
+              <div class="field-group">
+                <label>分辨率档位</label>
+                <div class="segmented" aria-label="分辨率档位">
+                  <button type="button" data-resolution="1024" aria-pressed="false">1K · 长边 1024</button>
+                  <button type="button" data-resolution="1536" aria-pressed="false">1.5K · 长边 1536</button>
+                </div>
+                <small id="resolutionHint">保留画面比例，1.5K 需要更多显存和时间。</small>
+              </div>
+              <div class="field-group">
+                <label>画面比例</label>
+                <div class="ratio-grid">
+                  <button type="button" data-size="1024x1024">1:1</button>
+                  <button class="active" type="button" data-size="768x1024">3:4</button>
+                  <button type="button" data-size="1024x768">4:3</button>
+                  <button type="button" data-size="576x1024">9:16</button>
+                  <button type="button" data-size="1024x576">16:9</button>
+                </div>
+              </div>
+              <div class="two-column">
+                <label class="field">宽度<input id="width" type="number" value="768" min="64" max="2048" step="64"></label>
+                <label class="field">高度<input id="height" type="number" value="1024" min="64" max="2048" step="64"></label>
+              </div>
+              <label class="range-field"><span>采样步数 <output id="stepsValue">35</output></span><input id="steps" type="range" value="35" min="1" max="100"></label>
+              <label class="range-field"><span>CFG 引导 <output id="cfgValue">5.0</output></span><input id="cfg" type="range" value="5" min="1" max="30" step="0.5"></label>
+              <label class="range-field"><span>批次张数 <output id="batchValue">1</output></span><input id="batchSize" type="range" value="1" min="1" max="16"></label>
+          <label class="field">随机种子（-1 为每次随机）<div class="input-action"><input id="seed" type="number" value="-1" min="-1"><button id="randomSeed" type="button">每次随机</button></div></label>
+            </section>
+              <div class="desktop-generate surface">
+                <div><span class="eyebrow">READY TO CREATE</span><strong id="desktopGenerateMeta">1 张 · 随机种子</strong></div>
+                <button class="primary-button" id="desktopGenerate" type="button">开始生成</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+
+        <section class="view" id="reverseView" data-view="reverse">
+          <div class="page-head"><div><span class="eyebrow">IMAGE TO PROMPT · ANIMA</span><h1>提示词反推</h1><p>独立配置图片理解 API，生成适用于 Anima Base 的画质词前缀与英文自然语言描述，并非恢复原始提示词。</p></div></div>
+          <div class="reverse-layout"></div>
+        </section>
+        <section class="view" id="aiView" data-view="ai">
+          <div class="page-head">
+            <div><span class="eyebrow">CREATIVE AGENT</span><h1>AI 助手</h1><p>用对话完成创作，查看计划、工具进度与操作结果。</p></div>
+            <div class="ai-head-actions"><button class="config-badge" id="editSystemPrompt" type="button">系统提示词</button><button class="config-badge" id="aiConfigBadge" type="button">检查配置中</button></div>
+          </div>
+        </section>
+
+        <section class="view" id="galleryView" data-view="gallery">
+          <div class="page-head compact">
+            <div><span class="eyebrow">YOUR ARCHIVE</span><h1>作品图库</h1><p id="galleryCount">还没有作品</p></div>
+            <button class="secondary-button" id="clearGallery" type="button">清空记录</button>
+          </div>
+          <div class="gallery-grid" id="galleryGrid"></div>
+          <div class="empty-state" id="galleryEmpty"><span>◇</span><strong>作品会出现在这里</strong><p>完成第一次生成后，可以随时查看和复用参数。</p></div>
+        </section>
+
+        <section class="view" id="presetsView" data-view="presets">
+          <div class="page-head compact">
+            <div><span class="eyebrow">CREATIVE LIBRARY</span><h1>预设与收藏</h1><p>保存完整工作台参数，在手机上快速复用。</p></div>
+            <button class="secondary-button accent" id="savePreset" type="button">保存当前</button>
+          </div>
+          <div class="preset-grid" id="presetGrid"></div>
+          <div class="empty-state" id="presetEmpty"><span>＋</span><strong>还没有预设</strong><p>保存当前参数后，会在这里生成一张预设卡片。</p></div>
+        </section>
+      </main>
+
+      <aside class="parameter-sheet" id="parameterSheet" aria-hidden="true">
+        <div class="sheet-backdrop" data-close-sheet></div>
+        <div class="sheet-panel">
+          <div class="sheet-grabber"></div>
+          <div class="sheet-head">
+            <div><span class="eyebrow">CONTROL DECK</span><h2>生成参数</h2></div>
+            <button class="icon-button sheet-close" type="button" data-close-sheet aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </div>
+          <div class="sheet-tabs" role="tablist">
+            <button type="button" data-param-tab="model">模型</button>
+            <button type="button" data-param-tab="lora">LoRA</button>
+            <button type="button" data-param-tab="advanced">高级</button>
+          </div>
+          <div class="sheet-content">
+
+
+            <section class="param-page" data-param-page="model">
+              <div class="segmented" id="modeSelector">
+                <button class="active" type="button" data-mode="checkpoint">Checkpoint</button>
+                <button type="button" data-mode="unet">UNET</button>
+              </div>
+              <div id="checkpointFields">
+                <label class="field">Checkpoint<select id="checkpoint"><option>加载中…</option></select></label>
+              </div>
+              <div id="unetFields" hidden>
+                <label class="field">UNET<select id="unet"><option>加载中…</option></select></label>
+                <label class="field">Text Encoder<select id="clip"><option>加载中…</option></select></label>
+                <label class="field">CLIP 类型<select id="clipType"><option>加载中…</option></select></label>
+                <label class="field">VAE<select id="vae"><option>加载中…</option></select></label>
+                <label class="field">权重精度<select id="weightDtype"><option value="default">default</option><option value="fp8_e4m3fn">fp8_e4m3fn</option><option value="fp8_e5m2">fp8_e5m2</option></select></label>
+              </div>
+            </section>
+
+            <section class="param-page" data-param-page="lora">
+              <div class="inline-note"><span>LoRA 会按照列表顺序串联加载</span><button id="addLora" type="button">＋ 添加</button></div>
+              <div class="lora-list" id="loraList"></div>
+            </section>
+
+            <section class="param-page" data-param-page="advanced">
+              <label class="field">采样器<select id="sampler"><option>加载中…</option></select></label>
+              <label class="field">调度器<select id="scheduler"><option>加载中…</option></select></label>
+              <div class="info-card"><span>输出前缀</span><strong>ComfyUI_Mobile</strong><p>高级工作流扩展会继续沿用这一页，不影响快速创作区。</p></div>
+            </section>
+          </div>
+          <button class="sheet-apply" id="applyParams" type="button">应用参数</button>
+        </div>
+      </aside>
+    </div>
+
+    <div class="generation-dock" id="generationDock" aria-live="polite">
+      <button id="mobileQueue" class="mobile-queue-button" type="button" aria-label="打开生成队列" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M3 6h1M3 12h1M3 18h1"/></svg><span id="mobileQueueCount">0</span></button>
+      <div class="dock-copy"><span id="dockStatus">准备就绪</span><strong id="dockMeta">1 张 · 768 × 1024</strong></div>
+      <button class="stop-button" id="stopGenerate" type="button" hidden>停止</button>
+      <button class="generate-button" id="generate" type="button"><span>开始生成</span><svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></svg></button>
+    </div>
+
+    <dialog id="mobileQueueDialog" class="mobile-queue-dialog"><header><h2>生成队列</h2><button type="button" id="closeMobileQueue" aria-label="关闭生成队列">×</button></header><div id="mobileQueueBody"></div></dialog>
+    <nav class="bottom-nav" aria-label="主导航">
+      <button class="active" type="button" data-nav="studio"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 2-2 5 5"/></svg><span>创作</span></button>
+      <button type="button" data-nav="ai"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg><span>AI</span></button>
+      <button type="button" data-nav="gallery"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg><span>图库</span></button>
+      <button type="button" data-nav="presets"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4V4Z"/></svg><span>预设</span></button>
+      <button type="button" data-nav="reverse"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM7 15l4-4 3 3 3-4"/></svg><span>反推</span></button>
+    </nav>
+  </div>
+
+  <div class="modal-sheet" id="promptSheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close-prompt></div>
+    <div class="prompt-panel">
+      <div class="sheet-grabber"></div>
+      <div class="sheet-head">
+        <div><span class="eyebrow">PROMPT EDITOR</span><h2>描述你的画面</h2></div>
+        <button class="icon-button sheet-close" type="button" data-close-prompt aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="prompt-tabs"><button class="active" type="button" data-prompt-tab="positive">正向提示词</button><button type="button" data-prompt-tab="negative">负向提示词</button></div>
+      <textarea id="prompt" class="prompt-editor active" data-prompt-page="positive" placeholder="例如：电影感人像，雨夜东京街头，霓虹反射…">masterpiece, best quality, cinematic portrait, delicate details</textarea>
+      <textarea id="negPrompt" class="prompt-editor" data-prompt-page="negative" placeholder="不希望出现的内容…">worst quality, low quality, blurry, bad hands</textarea>
+      <div class="prompt-tools"><button id="clearPrompt" type="button">清空当前</button><button data-open-artists type="button">画师参考</button><button id="openAiFromPrompt" type="button">✦ AI 帮我优化</button></div>
+      <button class="sheet-apply" id="applyPrompt" type="button">应用提示词</button>
+    </div>
+  </div>
+
+  <div class="modal-sheet" id="settingsSheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close-settings></div>
+    <div class="settings-panel">
+      <div class="sheet-grabber"></div>
+      <div class="sheet-head"><div><span class="eyebrow">PREFERENCES</span><h2>工作台设置</h2></div><button class="icon-button sheet-close" type="button" data-close-settings aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <div class="settings-layout">
+        <nav class="settings-nav" aria-label="设置分类">
+          <button type="button" data-settings-tab="appearance" aria-pressed="true" class="active">界面外观<span>主题与显示</span></button>
+          <button type="button" data-settings-tab="ai" aria-pressed="false">AI 服务<span>连接与模型</span></button>
+          <button type="button" data-settings-tab="prompt" aria-pressed="false">系统提示词<span>自定义助手</span></button>
+          <button type="button" data-settings-tab="connection" aria-pressed="false">连接状态<span>本机与移动端</span></button>
+        </nav>
+        <div class="settings-list">
+          <section class="settings-category" data-settings-page="appearance">
+            <header><h3>界面外观</h3><p>选择适合你的工作台配色，布局和操作保持一致。</p></header>
+        <div class="appearance-setting">
+          <div><strong>界面外观</strong><small>保持与移动端外壳一致</small></div>
+          <div class="theme-selector" role="radiogroup" aria-label="界面主题">
+            <button type="button" data-theme-choice="system" role="radio">跟随系统</button>
+            <button type="button" data-theme-choice="light" role="radio">浅色</button>
+            <button type="button" data-theme-choice="dark" role="radio">深色</button>
+          </div>
+        </div>
+          </section>
+          <section class="settings-category" data-settings-page="ai" hidden>
+            <header><h3>AI 服务</h3><p>用于 AI 对话与提示词优化，与图片反推的 API 配置独立。</p></header>
+        <div class="setting-row"><span><strong>AI 服务</strong><small id="settingsAi">正在检测</small></span><span class="config-badge" id="settingsAiBadge">检测中</span></div>
+        <label class="field api-key-field">DeepSeek API Key
+          <span class="secret-line">
+            <input id="deepseekApiKey" type="password" inputmode="text" autocomplete="off" spellcheck="false" placeholder="sk-…（留空表示不修改）">
+            <button id="toggleApiKey" type="button" aria-label="显示 API Key">显示</button>
+          </span>
+          <small>保存到电脑根目录 comfy_studio.yaml，长期生效，手机与网页共用。</small>
+        </label>
+        <label class="field">AI 模型
+          <input id="aiModel" type="text" autocomplete="off" spellcheck="false" placeholder="deepseek-v4-pro">
+          <small>DeepSeek 模型名，留空恢复默认。</small>
+        </label>
+        <label class="field">API 地址（可选）
+          <input id="aiApiBase" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.deepseek.com">
+        </label>
+
+          </section>
+          <section class="settings-category" data-settings-page="prompt" hidden>
+            <header><h3>系统提示词</h3><p>设定助手的回答方式，不影响图片反推规则。</p></header>
+        <label class="field">AI 系统提示词（可自由编辑）<textarea id="systemPrompt" rows="7">你是一个可自由配置的通用 AI 助手。优先遵循用户当前输入，按其指定的语言、格式、语气和长度直接完成任务。不要默认把回答限制为生图提示词，也不要强制输出 JSON 或固定字段。只有当用户明确要求生成或修改 ComfyUI 生图提示词或参数时，才给出可应用的 prompt、negative_prompt 和 params；其他请求按普通对话直接回答。</textarea><small>自动保存在当前设备；不会强制 AI 使用固定输出格式。</small></label>
+          </section>
+          <section class="settings-category" data-settings-page="connection" hidden>
+            <header><h3>连接状态</h3><p>查看工作台服务与同一网络中的访问地址。</p></header>
+        <div class="setting-row"><span><strong>ComfyUI 连接</strong><small id="settingsConnection">正在检测</small></span><span class="status-dot" id="settingsDot"></span></div>
+        <div class="info-card"><span>移动端访问地址</span><strong id="accessAddress">—</strong><p>手机和电脑需处于同一网络；如需远程访问，建议使用可信 VPN。</p></div>
+          </section>
+        </div>
+      </div>
+      <button class="sheet-apply" id="saveSettings" type="button">保存设置</button>
+    </div>
+  </div>
+
+  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle">
+    <header class="artist-dialog-head"><h2 id="cameraDialogTitle">机位控制</h2><button type="button" id="closeCamera" aria-label="关闭机位控制" title="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+              <section class="camera-control-panel surface" id="cameraControlPanel">
+                <div class="section-heading"><h2>相机</h2><label><input type="checkbox" data-camera-field="enabled"> 开启</label></div>
+                <div data-camera-body hidden>
+                <div class="camera-toolbar"><button type="button" data-camera-expand>放大</button><button type="button" data-camera-reset-view>视图复位</button></div>
+                <canvas class="camera-viewport" tabindex="0" aria-label="3D 相机编辑器：左键拖相机，右键旋转视图，中键平移，滚轮缩放。也可使用下方滑块调整相机。"></canvas>
+                <p class="camera-help">左键绕中心主体环绕（原点在主体，镜头始终对准主体）· 右键旋转视图 · 中键平移 · 滚轮缩放<br>面对正面：主体右在画面左边，主体左在画面右边（和面对面看人一致）。</p>
+                <div class="camera-fields">
+                  <label>远近 <output data-camera-output="distance"></output><input type="range" min="1.5" max="9" step="0.1" data-camera-field="distance"></label>
+                  <label>远近权重 <output data-camera-output="distanceWeight"></output><input type="range" min="0" max="2.5" step="0.05" data-camera-field="distanceWeight"></label>
+                  <label>方位权重 <output data-camera-output="weight"></output><input type="range" min="0.5" max="2" step="0.05" data-camera-field="weight"></label>
+                </div>
+                <details class="camera-advanced"><summary>更多设置</summary>
+                <div class="camera-fields">
+                  <label>环绕角度 <output data-camera-output="azimuth"></output>°<input type="range" min="-180" max="180" step="1" data-camera-field="azimuth"></label>
+                  <label>俯仰角度 <output data-camera-output="elevation"></output>°<input type="range" min="-80" max="80" step="1" data-camera-field="elevation"></label>
+                </div>
+                <div class="camera-toolbar"><button type="button" data-camera-reset>重置相机参数</button></div>
+                <div class="camera-prompt-preview" data-camera-preview aria-live="polite"></div>
+                <p class="camera-help">方位按 Anima 4 向分配：from front / from behind / facing left / facing right。高度 high/low angle。远近 close-up 到 wide shot，权重单独调节，0 则不注入景别词。<br>
+主体左 facing left · 主体右 facing right</p>
+                </details>
+                </div>
+              </section>
+  </dialog>
+
+  <dialog id="artistDialog" aria-labelledby="artistDialogTitle">
+    <header class="artist-dialog-head">
+      <h2 id="artistDialogTitle">画师参考 · Animadex</h2>
+      <button id="artistClose" type="button" aria-label="关闭画师窗口" title="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </header>
+    <p class="artist-dialog-note">复制画师提示词后，返回粘贴。<button id="artistReload" type="button">重新加载</button></p>
+    <iframe id="artistFrame" title="Animadex 画师目录" referrerpolicy="no-referrer" allow="clipboard-write https://animadex.net" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+  </dialog>
+
+  <dialog class="name-dialog" id="presetDialog">
+    <form method="dialog">
+      <span class="eyebrow">SAVE PRESET</span><h2>保存当前预设</h2>
+      <label class="field">预设名称<input id="presetName" type="text" maxlength="40" placeholder="例如：Anima 竖屏人像"></label>
+      <div><button value="cancel" class="secondary-button">取消</button><button value="default" id="confirmPreset" class="primary-button">保存</button></div>
+    </form>
+  </dialog>
+
+
+  <div class="image-viewer" id="imageViewer" aria-hidden="true">
+    <button class="viewer-close" id="closeViewer" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <img id="viewerImage" alt="作品大图">
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <script type="module" src="/api/launcher/assets/js/app.js"></script>
+</body>
+</html>

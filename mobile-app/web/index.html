@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#f7f7f4">
-  <title>Comfy Studio</title>
+  <title>Comfy Studio Lite</title>
   <script>
     (function () {
       var saved = localStorage.getItem('comfyui_theme') || 'system';
@@ -181,6 +181,11 @@
       letter-spacing: -.02em;
     }
     .server-line input::placeholder { color: #b0b0a7; }
+    .discover-btn { width: 100%; height: 46px; margin-top: 14px; border: 1px solid var(--ink); border-radius: 12px; background: transparent; color: var(--ink); font-size: 13px; cursor: pointer; }
+    .discover-btn:active { background: var(--ink); color: var(--paper); }
+    .discover-btn:disabled { opacity: .4; }
+    .connect-meta span.ok { color: #55755c; }
+    html[data-theme="dark"] .connect-meta span.ok { color: #8eae94; }
     .line-action {
       position: absolute;
       right: 0;
@@ -323,7 +328,7 @@
       z-index: 5;
       min-height: calc(64px + var(--safe-bottom));
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       padding: 0 8px var(--safe-bottom);
       border-top: 1px solid var(--line);
       background: rgba(247,247,244,.97);
@@ -368,7 +373,7 @@
   <div class="splash" id="splash">
     <div class="splash-inner">
       <div class="brand-mark" aria-hidden="true"></div>
-      <div class="splash-title">Comfy Studio</div>
+      <div class="splash-title">Comfy Studio Lite</div>
       <div class="splash-sub">Remote creative instrument</div>
     </div>
   </div>
@@ -390,6 +395,8 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
           </button>
         </div>
+        <button class="discover-btn" id="btnDiscover" type="button">自动发现并连接</button>
+        <div class="connect-meta"><span id="discoverMsg">点击自动查找同一网络内的 Comfy Studio Lite</span></div>
         <div class="connect-meta"><span>支持 HTTP / HTTPS</span><span class="error" id="connectError">无法连接，请检查地址与网络</span></div>
       </div>
     </section>
@@ -399,7 +406,7 @@
   <main class="app" id="mainApp">
     <header class="topbar">
       <div class="brand-mark" aria-hidden="true"></div>
-      <div class="topbar-copy"><div class="topbar-title">Comfy Studio</div></div>
+      <div class="topbar-copy"><div class="topbar-title">Comfy Studio Lite</div></div>
       <div class="server-state"><span class="dot" id="dot"></span><span class="server-label" id="serverLabel"></span></div>
     </header>
 
@@ -443,7 +450,7 @@
           </div>
         </div>
         <button class="disconnect-action" id="btnDisconn" type="button"><span><strong>更换服务器</strong><small>清除当前地址并返回连接页</small></span><i>→</i></button>
-        <div class="about"><strong>Comfy Studio Mobile</strong>Capacitor · Android<br>界面数据保存在当前设备</div>
+        <div class="about"><strong>Comfy Studio Lite</strong>Capacitor · Android<br>界面数据保存在当前设备</div>
       </section>
     </section>
 
@@ -453,6 +460,12 @@
       </button>
       <button class="nav-item" type="button" data-tab="ai">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v10H9l-4 3V6Z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg><span class="nav-label">AI 助手</span>
+      </button>
+      <button class="nav-item" type="button" data-tab="reverse">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM7 15l4-4 3 3 3-4"/></svg><span class="nav-label">反推</span>
+      </button>
+      <button class="nav-item" type="button" data-tab="gallery">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg><span class="nav-label">图库</span>
       </button>
       <button class="nav-item" type="button" data-tab="presets">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></svg><span class="nav-label">预设</span>
@@ -561,10 +574,14 @@
         $('mainApp').className = 'app';
         $('setup').className = 'setup show';
         $('serverInput').value = serverUrl.replace(/^https?:\/\//i, '');
+        autoDiscoverAllowed = true;
         setTimeout(function () { $('serverInput').focus(); }, 280);
+        setTimeout(runAutoDiscover, 420);
+        startDiscoveryLoop();
       }
 
       function showApp() {
+        stopDiscoveryLoop();
         $('splash').className = 'splash hide';
         $('setup').className = 'setup';
         $('mainApp').className = 'app show';
@@ -592,7 +609,7 @@
         $('settingsView').className = isSettings ? 'settings show' : 'settings';
         if (isSettings) loadAiSettings();
         if (!isSettings) {
-          var remoteView = tab === 'ai' ? 'ai' : tab === 'presets' ? 'presets' : 'studio';
+          var remoteView = ['ai', 'gallery', 'presets', 'reverse'].includes(tab) ? tab : 'studio';
           var frame = $('mainFrame');
           var url = serverUrl + '/launcher?embedded=1';
           if (frame.dataset.server !== serverUrl) {
@@ -607,7 +624,7 @@
 
       $('mainFrame').addEventListener('load', function () {
         if (!serverUrl || currentTab === 'settings') return;
-        var remoteView = currentTab === 'ai' ? 'ai' : currentTab === 'presets' ? 'presets' : 'studio';
+        var remoteView = ['ai', 'gallery', 'presets', 'reverse'].includes(currentTab) ? currentTab : 'studio';
         if (this.contentWindow) this.contentWindow.postMessage({ type: 'comfy-mobile-nav', view: remoteView }, '*');
         syncThemeToFrame();
       });
@@ -619,12 +636,20 @@
         if (themeMode === 'system') applyTheme('system', false);
       });
       window.addEventListener('message', function (event) {
+        if (event.source === $('mainFrame').contentWindow && event.origin === serverUrl && event.data?.type === 'comfy-mobile-view' && event.data.view === 'studio') {
+          loadTab('gen');
+          return;
+        }
         if (event.source !== $('mainFrame').contentWindow || event.data?.type !== 'comfy-theme-change') return;
         applyTheme(event.data.mode, true);
       });
 
-      $('btnConnect').addEventListener('click', function () {
+      $('btnConnect').addEventListener('click', connectToServer);
+
+      function connectToServer() {
         if (!$('serverInput').value.trim()) return;
+        autoDiscoverAllowed = false;
+        discoveryEpoch++;
         serverUrl = normalizeAddress($('serverInput').value);
         $('btnConnect').disabled = true;
         $('connectError').className = 'error';
@@ -637,10 +662,92 @@
           }
           $('btnConnect').disabled = false;
         });
+      }
+
+      function isNativeApp() {
+        var capacitor = window.Capacitor;
+        return Boolean(capacitor && capacitor.isNativePlatform && capacitor.isNativePlatform());
+      }
+
+      function discoverServer() {
+        var capacitor = window.Capacitor;
+        var plugin = capacitor && capacitor.Plugins && capacitor.Plugins.LanDiscovery;
+        if (!isNativeApp() || !plugin || !plugin.scan) {
+          var total = (capacitor && capacitor.Plugins) ? Object.keys(capacitor.Plugins).length : -1;
+          return Promise.resolve({ error: true, message: '插件未就绪（插件总数:' + total + '）' });
+        }
+        return plugin.scan().then(function (res) {
+          return { servers: (res && res.servers) || [] };
+        }).catch(function (e) {
+          return { error: true, message: (e && e.message) || '未知错误' };
+        });
+      }
+
+      var discoveryEpoch = 0;
+      var autoDiscoverAllowed = true;
+      var discoveryTimer = null;
+      function startDiscoveryLoop() {
+        stopDiscoveryLoop();
+        discoveryTimer = setInterval(function () {
+          if ($('setup').classList.contains('show')) runAutoDiscover(false);
+        }, 15000);
+      }
+      function stopDiscoveryLoop() {
+        if (discoveryTimer) clearInterval(discoveryTimer);
+        discoveryTimer = null;
+      }
+      async function runAutoDiscover(explicit) {
+        if (!isNativeApp() || $('btnDiscover').disabled || (!explicit && !autoDiscoverAllowed)) return;
+        var epoch = ++discoveryEpoch;
+        var msg = $('discoverMsg');
+        $('btnDiscover').disabled = true;
+        msg.classList.remove('ok');
+        msg.textContent = '正在发现局域网服务并验证身份…';
+        try {
+          var result = await discoverServer();
+          if (epoch !== discoveryEpoch || !$('setup').classList.contains('show')) return;
+          if (result.error) { msg.textContent = result.message + '；可手动输入地址'; return; }
+          applyDiscoveryResult(result);
+        } finally { $('btnDiscover').disabled = false; }
+      }
+
+      function applyDiscoveryResult(result) {
+        var msg = $('discoverMsg');
+        var servers = result.servers.filter(function(s) {
+          return s.app === 'comfy-studio' && s.protocol === 1 && typeof s.url === 'string';
+        });
+        msg.replaceChildren();
+        if (!servers.length) {
+          msg.textContent = '未发现通过验证的服务。已尝试 mDNS 和当前网段的 8188 端口，请确认电脑已启动并允许局域网连接；也可手动输入地址。';
+          return;
+        }
+        function choose(server) {
+          $('serverInput').value = server.url;
+          msg.textContent = '已验证 ' + server.name + '，正在连接…';
+          msg.classList.add('ok');
+          connectToServer();
+        }
+        if (servers.length === 1) { choose(servers[0]); return; }
+        msg.append(document.createTextNode('发现多台 Comfy Studio Lite，请选择：'));
+        servers.forEach(function(server) {
+          var button = document.createElement('button');
+          button.type = 'button'; button.className = 'discover-btn';
+          button.textContent = server.name + ' · ' + server.url;
+          button.onclick = function() { choose(server); };
+          msg.append(button);
+        });
+      }
+
+      $('btnDiscover').addEventListener('click', function () {
+        autoDiscoverAllowed = true;
+        runAutoDiscover(true);
       });
 
       $('serverInput').addEventListener('keydown', function (event) {
         if (event.key === 'Enter') { event.preventDefault(); $('btnConnect').click(); }
+      });
+      $('serverInput').addEventListener('input', function () {
+        autoDiscoverAllowed = !this.value.trim();
       });
       $('btnRetry').addEventListener('click', function () {
         check().then(function (online) {
@@ -650,6 +757,7 @@
       });
       $('btnDisconn').addEventListener('click', function () {
         localStorage.removeItem(SERVER_KEY);
+        stopDiscoveryLoop();
         if (timer) clearInterval(timer);
         $('mainFrame').src = 'about:blank';
         delete $('mainFrame').dataset.server;

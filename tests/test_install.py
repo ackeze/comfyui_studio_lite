@@ -44,6 +44,13 @@ class InstallTests(unittest.TestCase):
     def test_mirror_urls_include_hf_mirror(self):
         urls = INSTALL.mirror_urls('https://huggingface.co/circlestone-labs/Anima/resolve/main/file.safetensors')
         self.assertIn('https://hf-mirror.com/circlestone-labs/Anima/resolve/main/file.safetensors', urls)
+        self.assertIn('https://alpha.hf-mirror.com/circlestone-labs/Anima/resolve/main/file.safetensors', urls)
+
+    def test_resource_report_marks_present_and_missing(self):
+        (self.root / 'models' / 'unet' / 'waiANIMA_v10Base10.safetensors').write_bytes(b'x')
+        report = {item['id']: item for item in INSTALL.resource_report(self.root, 'required')}
+        self.assertTrue(report['anima-unet']['present'])
+        self.assertFalse(report['anima-clip']['present'])
 
     def test_default_selection_skips_nothing_required(self):
         chosen = {item['id'] for item in INSTALL.selected(INSTALL.load_resources(), 'recommended')}

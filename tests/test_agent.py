@@ -142,6 +142,56 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
     def test_policy_allows_adult_nsfw(self):
         self.assertIn('Adult NSFW is in scope', self.agent.POLICY)
         self.assertIn('never add nsfw', self.agent.POLICY)
+        self.assertIn('studio_resources', self.agent.POLICY)
+        self.assertIn('loli', self.agent.POLICY)
+
+    async def test_studio_install_waits_for_confirmation(self):
+        root = Path(self.directory.name)
+        (root / 'models').mkdir()
+        self.agent.studio_install.find_comfy_root = lambda: root
+        self.agent.studio_install.python_dep_missing = lambda: False
+        downloaded = []
+
+        def fake_download(url, destination, size):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b'x')
+            downloaded.append(destination.name)
+
+        self.agent.studio_install.download = fake_download
+        self.replies.extend([
+            {'role': 'assistant', 'content': '先检查', 'tool_calls': [{'id': 's', 'type': 'function', 'function': {'name': 'studio_resources', 'arguments': '{"group":"required"}'}}]},
+            {'role': 'assistant', 'content': '需要安装', 'tool_calls': [{'id': 'p', 'type': 'function', 'function': {'name': 'prepare_studio_install', 'arguments': '{"group":"required"}'}}]},
+        ])
+        response = await self.client.post('/launcher/agent/sessions', json={'text': '帮我安装模型和依赖'})
+        identity = (await response.json())['id']
+        state = await self.wait_state(identity, 'waiting')
+        self.assertEqual(state['pending']['feature'], 'studio_install')
+        self.assertEqual(set(state['pending']['ids']), {'anima-unet', 'anima-clip', 'anima-vae'})
+        self.replies.append({'role': 'assistant', 'content': '已经装好'})
+        response = await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': state['pending']['id'], 'result': {'approved': True}})
+        self.assertEqual(response.status, 200)
+        state = await self.wait_state(identity, 'done')
+        self.assertEqual(sorted(downloaded), ['anima-base-v1.0.safetensors', 'qwen_3_06b_base.safetensors', 'qwen_image_vae.safetensors'])
+        self.assertIn('已经装好', [event['text'] for event in state['events'] if event['type'] == 'assistant'])
+
+    async def test_studio_install_skips_when_complete(self):
+        root = Path(self.directory.name)
+        (root / 'models' / 'unet').mkdir(parents=True)
+        (root / 'models' / 'unet' / 'waiANIMA.safetensors').write_bytes(b'x')
+        (root / 'models' / 'text_encoders').mkdir()
+        (root / 'models' / 'text_encoders' / 'qwen_3_06b_base.safetensors').write_bytes(b'x')
+        (root / 'models' / 'vae').mkdir()
+        (root / 'models' / 'vae' / 'qwen_image_vae.safetensors').write_bytes(b'x')
+        self.agent.studio_install.find_comfy_root = lambda: root
+        self.agent.studio_install.python_dep_missing = lambda: False
+        self.replies.extend([
+            {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'p', 'type': 'function', 'function': {'name': 'prepare_studio_install', 'arguments': '{"group":"required"}'}}]},
+            {'role': 'assistant', 'content': '已经齐了'},
+        ])
+        response = await self.client.post('/launcher/agent/sessions', json={'text': '检查安装'})
+        state = await self.wait_state((await response.json())['id'], 'done')
+        self.assertIsNone(state['pending'])
+        self.assertEqual([event['text'] for event in state['events'] if event['type'] == 'assistant'], ['已经齐了'])
 
     async def test_validation_and_cancel(self):
         response = await self.client.post('/launcher/agent/sessions', json={'text': ''})

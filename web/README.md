@@ -8,7 +8,7 @@
 
 - `custom_nodes/aki_launcher/` — 后端：注册 `/launcher` 路由，提供 AI 聊天代理与预设读写
 - `custom_nodes/aki_launcher/web/` — 前端：移动端优化的生图 UI（创作 / 场景 / AI 助手 / 图库 / 预设）
-- `mobile-app/` — Capacitor Android 外壳，内嵌 `web/index.html`，输入电脑局域网地址即可连接
+- 本机 `mobile-app/` — Capacitor Android 外壳（不随插件仓库发布）
 - `启动器.bat` — 以 `--listen 0.0.0.0 --port 8188` 启动服务并打印手机访问地址
 
 ## 使用

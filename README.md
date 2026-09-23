@@ -43,6 +43,16 @@ set HF_ENDPOINT=https://hf-mirror.com
 
 重启 ComfyUI，打开 `http://127.0.0.1:8188/launcher`。手机访问请用 `--listen 0.0.0.0`。
 
+手机连不上时，Windows 防火墙需要放行 **TCP 8188 入站**（仅专用/域网络）。管理员运行一次：
+
+```bat
+netsh advfirewall firewall add rule name="Comfy Studio Lite LAN" dir=in action=allow protocol=TCP localport=8188 profile=private,domain
+```
+
+若目录里有 `Allow-LAN.bat`，右键以管理员运行一次即可。当前 Wi-Fi 须为「专用」网络；手机先关 VPN 再自动发现。
+
+已经能打开工作台时，也可以在 AI 对话里说「帮我检查并安装缺失的模型和依赖」，确认下载后由助手补齐。
+
 前端由本插件提供，不必再拷到 ComfyUI 的 `web/`。
 
 ## 会下载的资源
@@ -68,5 +78,4 @@ web/                 /launcher 前端
 install.py           一键补依赖和模型
 resources.json       资源清单
 pyproject.toml       Comfy Registry 元数据
-mobile-app/          可选：Android 外壳
 ```

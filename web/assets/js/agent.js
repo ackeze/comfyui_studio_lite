@@ -25,14 +25,18 @@ export function initAgent(editor, snapshot) {
   cameraButton.onclick=async()=>{try{await editor({feature:'camera'},async()=>{const result=await snapshot({feature:'camera'});choices.camera={...result.settings.cameraControl,enabled:true};renderChoices();});}catch(error){setNote(error.message);}};
   const artistButton=document.createElement('button');artistButton.type='button';artistButton.className='agent-compose-option';artistButton.textContent='画师';
   host.querySelector('.agent-attach').after(cameraButton,artistButton);
-  const artistPicker=document.createElement('dialog');artistPicker.className='agent-editor-dialog';artistPicker.setAttribute('aria-label','指定画师');
-  const artistTitle=document.createElement('h3');artistTitle.textContent='指定画师';
+  const artistPicker=document.createElement('dialog');artistPicker.className='agent-editor-dialog agent-artist-picker';artistPicker.setAttribute('aria-label','指定画师');
+  const artistHeader=document.createElement('header');artistHeader.className='agent-editor-head';
+  const artistTitle=document.createElement('h2');artistTitle.textContent='指定画师';
+  const artistClose=document.createElement('button');artistClose.type='button';artistClose.textContent='×';artistClose.setAttribute('aria-label','关闭画师设置');artistClose.onclick=()=>artistPicker.close();artistHeader.append(artistTitle,artistClose);
   const artistInput=document.createElement('input');artistInput.type='text';artistInput.className='agent-search';artistInput.placeholder='输入或粘贴画师名称 / 标签';artistInput.setAttribute('aria-label','画师名称或标签');artistInput.maxLength=500;
-  const artistHint=document.createElement('p');artistHint.textContent='可从画师参考页复制标签，再粘贴到这里。';
-  const browse=document.createElement('button');browse.type='button';browse.textContent='浏览画师';browse.onclick=()=>editor({feature:'artists'},()=>{});
-  const choose=document.createElement('button');choose.type='button';choose.className='primary-button';choose.textContent='应用画师';choose.onclick=()=>{choices.artist=artistInput.value.trim();renderChoices();artistPicker.close();};
-  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='取消';cancel.onclick=()=>artistPicker.close();
-  artistPicker.append(artistTitle,artistInput,artistHint,browse,choose,cancel);host.append(artistPicker);
+  const artistHint=document.createElement('p');artistHint.textContent='使用 @画师名；多个画师用逗号分隔。自动补全 @、转小写，并将下划线转为空格。';
+  const browse=document.createElement('button');browse.type='button';browse.className='secondary-button';browse.textContent='浏览画师 ↗';browse.onclick=()=>editor({feature:'artists'},()=>{});
+  const choose=document.createElement('button');choose.type='button';choose.className='primary-button';choose.textContent='应用画师';choose.onclick=()=>{choices.artist=artistInput.value.split(/[,，;；\n]+/).map(name=>name.trim().replace(/^[@＠]+\s*/,'').replace(/_/g,' ').replace(/\s+/g,' ').trim().toLowerCase()).filter(Boolean).map(name=>'@'+name).join(', ');renderChoices();artistPicker.close();};
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary-button';cancel.textContent='取消';cancel.onclick=()=>artistPicker.close();
+  const artistFooter=document.createElement('footer');artistFooter.className='agent-editor-footer';
+  const artistSpacer=document.createElement('span');artistSpacer.setAttribute('aria-hidden','true');artistFooter.append(browse,artistSpacer,cancel,choose);
+  artistPicker.append(artistHeader,artistInput,artistHint,artistFooter);host.append(artistPicker);
   artistButton.onclick=()=>{artistInput.value=choices.artist;artistPicker.showModal();artistInput.focus();};
   composer.rows=1;
   function resizeComposer(){composer.style.height='auto';composer.style.height=Math.min(140,Math.max(36,composer.scrollHeight))+'px';}
@@ -144,24 +148,34 @@ export function initAgent(editor, snapshot) {
         }
         if(card.parentElement!==events)events.append(card);
       }
-      for(const job of session.jobs || []){
+      const eventList=session.events || [], jobList=session.jobs || [];
+      const generateAt=[];
+      for(let i=0;i<eventList.length;i++)if(eventList[i].type==='tool'&&eventList[i].text==='generate_image')generateAt.push(i);
+      for(const [index,job] of jobList.entries()){
         const key='job:'+job.prompt_id;retained.add(key);
         let card=messageNodes.get(key);if(!card){card=document.createElement('article');card.className='agent-event agent-generation';messageNodes.set(key,card);}
-        const jobSignature=JSON.stringify(job);if(card.dataset.signature===jobSignature)continue;
-        card.dataset.signature=jobSignature;card.replaceChildren();
-        const label=document.createElement('p');label.className='agent-job-state';label.dataset.state=job.status;
-        label.textContent=({queued:job.position?'排队中，前面还有 '+job.position+' 个任务':'已入队，等待开始',running:'正在生成…',unknown:'提交状态待确认，请勿重复生成',failed:'生成失败，请检查工具详情',done:'生成完成'})[job.status] || job.status;card.append(label);
-        for(const file of job.images || []){
-          const url='/view?'+new URLSearchParams({filename:file.filename,subfolder:file.subfolder || '',type:'output'});
-          const thumb=document.createElement('button'),img=document.createElement('img');
-          thumb.type='button';thumb.className='agent-thumb';thumb.title='点击查看大图';
-          img.src=url;img.alt='Agent 生成结果';img.loading='lazy';
-          thumb.append(img);thumb.onclick=()=>openViewer(url,file.filename);card.append(thumb);
+        const jobSignature=JSON.stringify(job);
+        if(card.dataset.signature!==jobSignature){
+          card.dataset.signature=jobSignature;card.replaceChildren();
+          const label=document.createElement('p');label.className='agent-job-state';label.dataset.state=job.status;
+          label.textContent=({queued:job.position?'排队中，前面还有 '+job.position+' 个任务':'已入队，等待开始',running:'正在生成…',unknown:'提交状态待确认，请勿重复生成',failed:'生成失败，请检查工具详情',done:'生成完成'})[job.status] || job.status;card.append(label);
+          for(const file of job.images || []){
+            const url='/view?'+new URLSearchParams({filename:file.filename,subfolder:file.subfolder || '',type:'output'});
+            const thumb=document.createElement('button'),img=document.createElement('img');
+            thumb.type='button';thumb.className='agent-thumb';thumb.title='点击查看大图';
+            img.src=url;img.alt='Agent 生成结果';img.loading='lazy';
+            thumb.append(img);thumb.onclick=()=>openViewer(url,file.filename);card.append(thumb);
+          }
         }
-        if(card.parentElement!==events)events.append(card);
+        const start=generateAt[index] ?? generateAt.at(-1) ?? eventList.length-1;
+        let nextUser=eventList.length;
+        for(let i=start+1;i<eventList.length;i++)if(eventList[i].type==='user'){nextUser=i;break;}
+        const next=messageNodes.get('event:'+nextUser);
+        if(next)events.insertBefore(card,next);
+        else events.append(card);
       }
       for(const [key,node] of messageNodes){if(!retained.has(key)){node.remove();messageNodes.delete(key);}}
-      if(!events.childElementCount)events.innerHTML='<div class="agent-welcome"><span>✦</span><h2>从一个想法开始</h2><p>对话、看图，或一起完成一次创作。</p><small>描述需求，即可自动填写参数并生成。</small></div>';
+      if(!events.childElementCount)events.innerHTML='<div class="agent-welcome"><span>✦</span><h2>从一个想法开始</h2><p>对话、看图，或一起完成一次创作。</p><small>描述需求即可生图；缺模型或依赖也可以直接让我安装。</small></div>';
       if(stick)events.scrollTop=events.scrollHeight;
       latest.hidden=events.scrollHeight-events.scrollTop-events.clientHeight<120;
     }
@@ -169,7 +183,7 @@ export function initAgent(editor, snapshot) {
     if(pending.dataset.id!==(session.pending?.id || '')){
       pending.replaceChildren();pending.dataset.id=session.pending?.id || '';
       if(session.pending){
-        const request=session.pending,download=request.feature==='download';
+        const request=session.pending,download=request.feature==='download'||request.feature==='studio_install';
         const text=document.createElement('div');renderMarkdown(text,request.instruction || '请确认操作');pending.append(text);
         const actions=[];
         const submit=async()=>{const result=await capture(request);show(await api('/'+identity+'/submit',{id:request.id,result}));poll();};
@@ -205,7 +219,7 @@ export function initAgent(editor, snapshot) {
       const body={text:host.querySelector('textarea').value,system_prompt:document.getElementById('systemPrompt').value};
       const selected=[];
       if(choices.camera)selected.push('指定机位：生成时将以下参数传入 generate_image 的 camera 字段：'+JSON.stringify(choices.camera));
-      if(choices.artist)selected.push('指定画师：'+choices.artist+'。请将该画师风格用于本次生成提示词。');
+      if(choices.artist)selected.push('指定画师标签：'+choices.artist+'。请将这些 @画师名 标签原样写入本次生成的正向 prompt，保留 @ 前缀，不要改写为 by 或仅描述风格。');
       if(selected.length)body.text+='\n\n'+selected.join('\n');
       if(attachments.length)body.images=await Promise.all(attachments.map(encodeImage));
       const session=await api(identity && current?.status==='done'?'/'+identity+'/messages':'',body);identity=session.id;localStorage.setItem('comfy_agent_session',identity);composer.value='';resizeComposer();imageInput.value='';attachments.length=0;syncAttachments();show(session);refreshHistory();poll();

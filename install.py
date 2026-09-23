@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -28,7 +29,7 @@ def find_comfy_root():
     for path in (PLUGIN_DIR, *PLUGIN_DIR.parents, Path.cwd(), Path.cwd().parent):
         if is_comfy(path):
             return path
-    raise SystemExit('未找到 ComfyUI 根目录。请把本插件放到 custom_nodes 下，或设置 COMFYUI_PATH。')
+    raise FileNotFoundError('未找到 ComfyUI 根目录。请把本插件放到 custom_nodes 下，或设置 COMFYUI_PATH。')
 
 
 def find_python(comfy):
@@ -83,13 +84,28 @@ def mirror_urls(url):
     if 'huggingface.co' not in url:
         return urls
     path = url.split('huggingface.co', 1)[1]
-    for base in (os.environ.get('HF_ENDPOINT', '').rstrip('/'), 'https://huggingface.co', 'https://hf-mirror.com'):
+    for base in (os.environ.get('HF_ENDPOINT', '').rstrip('/'), 'https://huggingface.co', 'https://hf-mirror.com', 'https://alpha.hf-mirror.com'):
         if not base:
             continue
         candidate = base + path
         if candidate not in urls:
             urls.append(candidate)
     return urls
+
+
+def open_download(url, headers, timeout=60):
+    current = url
+    for _ in range(8):
+        request = urllib.request.Request(current, headers=headers)
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError as error:
+            location = error.headers.get('Location') if error.code in (301, 302, 303, 307, 308) else None
+            error.close()
+            if not location:
+                raise
+            current = urllib.parse.urljoin(current, location)
+    raise OSError('下载重定向次数过多')
 
 
 def format_bytes(value):
@@ -110,8 +126,7 @@ def download(url, destination, expected):
             headers = {'User-Agent': 'ComfyStudioLite-installer'}
             if offset:
                 headers['Range'] = 'bytes=%s-' % offset
-            request = urllib.request.Request(candidate, headers=headers)
-            with urllib.request.urlopen(request, timeout=60) as response, open(part, 'ab' if offset else 'wb') as handle:
+            with open_download(candidate, headers) as response, open(part, 'ab' if offset else 'wb') as handle:
                 total = expected or int(response.headers.get('Content-Length') or 0) + offset
                 done = offset
                 while True:
@@ -131,7 +146,36 @@ def download(url, destination, expected):
             last_error = error
             print('\n  源失败 %s：%s' % (candidate, error))
             offset = part.stat().st_size if part.is_file() else 0
-    raise SystemExit('下载失败：%s' % last_error)
+    raise OSError('下载失败：%s' % last_error)
+
+
+def python_dep_missing():
+    try:
+        import zeroconf
+        return False
+    except ImportError:
+        return True
+
+
+def resource_report(comfy, mode='recommended'):
+    items = []
+    for resource in selected(load_resources(), mode):
+        found = existing_path(comfy, resource)
+        items.append({
+            'id': resource['id'],
+            'title': resource['title'],
+            'group': resource['group'],
+            'folder': resource['folder'],
+            'name': resource['name'],
+            'size': resource.get('size') or 0,
+            'present': found is not None,
+            'path': None if found is None else str(found.relative_to(comfy)),
+        })
+    return items
+
+
+def catalog():
+    return {item['id']: item for item in load_resources()}
 
 
 def install_python_deps(python):
@@ -179,7 +223,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    comfy = find_comfy_root()
+    try:
+        comfy = find_comfy_root()
+    except FileNotFoundError as error:
+        raise SystemExit(str(error))
     python = find_python(comfy)
     plugin = ensure_plugin(comfy)
     print('ComfyUI：%s' % comfy)

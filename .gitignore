@@ -3,10 +3,4 @@ __pycache__/
 *.part
 web/presets.json
 ai_key.txt
-mobile-app/node_modules/
-mobile-app/.idea/
-mobile-app/android/.gradle/
-mobile-app/android/build/
-mobile-app/android/app/build/
-mobile-app/android/local.properties
 .DS_Store

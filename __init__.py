@@ -97,27 +97,38 @@ def server_api_key():
     return api_key
 
 
+def _usable_lan_ip(ip):
+    if not ip or ":" in ip or ip.startswith("127.") or ip.startswith("169.254."):
+        return False
+    try:
+        parts = [int(item) for item in ip.split(".")]
+    except ValueError:
+        return False
+    if len(parts) != 4 or any(item < 0 or item > 255 for item in parts):
+        return False
+    return parts[0] == 10 or (parts[0] == 192 and parts[1] == 168) or (parts[0] == 172 and 16 <= parts[1] <= 31)
+
+
 def _lan_ips():
     ips = set()
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             ip = info[4][0]
-            if not ip.startswith("127."):
+            if _usable_lan_ip(ip):
                 ips.add(ip)
     except OSError:
         pass
-    try:
+    for target in ("192.168.1.1", "192.168.0.1", "192.168.31.1", "10.0.0.1", "172.16.0.1", "192.0.2.1"):
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # No packets are sent; getsockname() reveals the route source IP.
-            probe.connect(("192.0.2.1", 80))
+            probe.connect((target, 80))
             ip = probe.getsockname()[0]
-            if ip and not ip.startswith("127.") and ip not in ips:
+            if _usable_lan_ip(ip):
                 ips.add(ip)
+        except OSError:
+            pass
         finally:
             probe.close()
-    except OSError:
-        pass
     return sorted(ips)
 
 

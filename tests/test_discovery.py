@@ -53,6 +53,20 @@ class DiscoveryTest(unittest.IsolatedAsyncioTestCase):
             await lifecycle.aclose()
             constructor.assert_not_called()
 
+    def test_usable_lan_ip(self):
+        tree = ast.parse((ROOT / "__init__.py").read_text(encoding="utf-8-sig"))
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_usable_lan_ip")
+        scope = {}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), "<lan>", "exec"), scope)
+        usable = scope["_usable_lan_ip"]
+        self.assertTrue(usable("192.168.1.8"))
+        self.assertTrue(usable("10.0.0.2"))
+        self.assertTrue(usable("172.16.0.5"))
+        self.assertFalse(usable("127.0.0.1"))
+        self.assertFalse(usable("169.254.1.1"))
+        self.assertFalse(usable("8.8.8.8"))
+        self.assertFalse(usable("::1"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,17 +32,17 @@ const root=process.env.STUDIO_TEST_ROOT || path.resolve(__dirname,'../web');
   assert.equal(jobs.length,1);assert.equal(await page.locator('[data-status="waiting"]').count(),2);
   await page.locator('#batchSize').fill('1');await page.locator('#generate').click();
   assert.equal(await page.locator('[data-status="waiting"]').count(),3);
-  await page.locator('[data-queue-cancel]').last().click();
-  assert.equal(await page.locator('[data-status="cancelled"]').count(),1);
+  await page.locator('[data-queue-delete]:not([disabled])').last().click();
+  assert.equal(await page.locator('[data-status="waiting"]').count(),2);
   for(let i=1;i<=3;i++){
    await page.evaluate(id=>window.testSocket.onmessage({data:JSON.stringify({type:'executing',data:{prompt_id:id,node:null}})}),`job${i}`);
    await page.waitForTimeout(250);
   }
-  assert.equal(jobs.length,3);assert.equal(await page.locator('[data-status="done"]').count(),3);
+  assert.equal(jobs.length,3);assert.equal(await page.locator('.queue-item[data-status="done"]').count(),3);
   const samplers=jobs.map(j=>Object.values(j.prompt).find(n=>n.class_type==='KSampler'));
   assert.deepEqual(samplers.map(n=>n.inputs.seed),[100,101,102]);
   assert.ok(jobs.every(j=>Object.values(j.prompt).filter(n=>n.inputs.batch_size!==undefined).every(n=>n.inputs.batch_size===1)));
   assert.deepEqual(errors,[]);
-  console.log('PASS: resize keyboard/drag, 3-image serial batch, seed progression, enqueue while running, cancel waiting, completed thumbnails');
+  console.log('PASS: resize keyboard/drag, 3-image serial batch, seed progression, enqueue while running, delete waiting, completed thumbnails');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

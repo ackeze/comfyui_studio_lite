@@ -21,8 +21,9 @@ from .scene_nodes import NODE_CLASS_MAPPINGS as SCENE_NODE_CLASS_MAPPINGS
 from .scene_nodes import NODE_DISPLAY_NAME_MAPPINGS as SCENE_NODE_DISPLAY_NAME_MAPPINGS
 from .sam_cutout import create_sam_cutout, normalize_cutout_bbox
 from . import interrogate
-from .agent import install_agent
+from .agent import chat_model, install_agent
 from .agent_generation import build_generation
+from .video_generation import build_video, install_video
 
 
 NODE_CLASS_MAPPINGS = {**SCENE_NODE_CLASS_MAPPINGS, **POSE_NODE_CLASS_MAPPINGS}
@@ -48,8 +49,9 @@ AI_KEY_FILE = Path(__file__).resolve().parent / "ai_key.txt"
 
 DEFAULT_AI_CONFIG = {
     "api_key": "",
-    "model": "deepseek-v4-pro",
+    "model": "deepseek-flash",
     "api_base": "https://api.deepseek.com",
+    "vision_model": "",
 }
 
 SAM_CUTOUT_LOCK = asyncio.Lock()
@@ -66,7 +68,7 @@ def load_ai_config():
             for key in DEFAULT_AI_CONFIG:
                 value = data.get(key)
                 if isinstance(value, str):
-                    config[key] = value.strip()
+                    config[key] = value.strip() or DEFAULT_AI_CONFIG[key]
     return config
 
 
@@ -266,6 +268,7 @@ async def get_launcher_ai_config(request):
             "configured": bool(server_api_key()),
             "model": config["model"],
             "api_base": config["api_base"],
+            "vision_model": config["vision_model"],
         }
     )
 
@@ -285,11 +288,12 @@ async def save_launcher_ai_settings(request):
         if len(api_key) > 512:
             return web.json_response({"error": "API Key is too long"}, status=400)
         config["api_key"] = api_key
-    if isinstance(body.get("model"), str):
-        model = body["model"].strip()
-        if len(model) > 128:
-            return web.json_response({"error": "Model name is too long"}, status=400)
-        config["model"] = model
+    for field in ("model", "vision_model"):
+        if isinstance(body.get(field), str):
+            model = body[field].strip()
+            if len(model) > 128:
+                return web.json_response({"error": "Model name is too long"}, status=400)
+            config[field] = model
     if isinstance(body.get("api_base"), str):
         api_base = body["api_base"].strip().rstrip("/")
         if api_base and not api_base.startswith(("http://", "https://")):
@@ -309,6 +313,7 @@ async def save_launcher_ai_settings(request):
             "model": config["model"],
             "api_base": config["api_base"],
             "api_key_set": bool(server_api_key()),
+            "vision_model": config["vision_model"],
         }
     )
 
@@ -334,7 +339,7 @@ async def launcher_ai_chat(request):
 
         config = load_ai_config()
         payload = {
-            "model": config["model"],
+            "model": chat_model(config, messages),
             "messages": messages,
             "stream": True,
         }
@@ -376,7 +381,8 @@ async def launcher_ai_chat(request):
         return web.json_response({"error": "AI provider is unavailable"}, status=502)
 
 
-install_agent(PromptServer.instance.routes, load_ai_config, server_api_key, build_generation, args.port)
+install_video(PromptServer.instance.routes)
+install_agent(PromptServer.instance.routes, load_ai_config, server_api_key, build_generation, args.port, video_builder=build_video)
 
 
 @PromptServer.instance.routes.get("/ai-chat")

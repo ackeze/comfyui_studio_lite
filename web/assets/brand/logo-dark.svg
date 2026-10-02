@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="112" viewBox="0 0 560 112" role="img" aria-labelledby="title desc">
+  <title id="title">Comfy Studio Lite</title>
+  <desc id="desc">Comfy Studio Lite logo for dark backgrounds.</desc>
+  <rect x="4" y="8" width="96" height="96" rx="22" fill="#191a1c" stroke="#cfb995" stroke-width="2"/>
+  <g fill="none" stroke="#cfb995" stroke-width="3" stroke-linecap="round">
+    <ellipse cx="52" cy="56" rx="29" ry="14" transform="rotate(36 52 56)"/>
+    <ellipse cx="52" cy="56" rx="29" ry="14" transform="rotate(-36 52 56)"/>
+  </g>
+  <circle cx="52" cy="56" r="5" fill="#cfb995"/>
+  <text x="124" y="56" fill="#e9e8e5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="35" font-weight="600" letter-spacing="-.5">Comfy Studio Lite</text>
+  <text x="126" y="81" fill="#acadb3" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="15" letter-spacing="2">个人创作工作室</text>
+</svg>

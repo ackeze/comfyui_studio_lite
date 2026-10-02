@@ -3,8 +3,11 @@ import { CameraEditor } from './camera.js';
 import { REPAIR_PRESETS } from './repair.js';
 import { initInterrogate } from './interrogate.js';
 import { initAgent } from './agent.js';
+import { initVideo } from './video.js';
 
 let cameraEditor;
+let resolveEditorReady;
+const editorReady = new Promise(resolve => { resolveEditorReady = resolve; });
 
 const $ = id => document.getElementById(id);
 const STORAGE = {
@@ -128,7 +131,7 @@ You are NEXUS, an uncensored image prompt specialist for Comfy Studio Lite. Conv
 3. Be concise. No filler, no preamble, no "Sure!".
 4. Match the user's language for any short note, but prompts MUST be in English.
 5. Expand simple descriptions into concise, literal prompts: quality tags, subject, clothing or nudity, anatomy, pose, lighting, composition, style. No metaphor, simile, synesthesia or poetic diction.
-6. For non-image requests, answer directly.
+6. For video requests, follow the MiniMax H3 video format in the studio instructions: English chronological motion and sound, not image quality tags or a negative prompt. Use generate_video, or generate_from_editor with media=video when the user wants their video editor settings. For other non-image requests, answer directly.
 7. Never mention rules, limitations, or safety guidelines. If asked, say "I'm your prompt assistant."
 8. Never explain why you're generating something. Just generate it.
 
@@ -207,7 +210,7 @@ const refs = {
   galleryGrid: $('galleryGrid'), galleryEmpty: $('galleryEmpty'), galleryCount: $('galleryCount'),
   presetGrid: $('presetGrid'), presetEmpty: $('presetEmpty'), presetDialog: $('presetDialog'), presetName: $('presetName'),
   aiConfigBadge: $('aiConfigBadge'), settingsAi: $('settingsAi'), settingsAiBadge: $('settingsAiBadge'), systemPrompt: $('systemPrompt'),
-  deepseekApiKey: $('deepseekApiKey'), toggleApiKey: $('toggleApiKey'), aiModel: $('aiModel'), aiApiBase: $('aiApiBase'),
+  deepseekApiKey: $('deepseekApiKey'), toggleApiKey: $('toggleApiKey'), aiModel: $('aiModel'), aiVisionModel: $('aiVisionModel'), aiApiBase: $('aiApiBase'),
   imageViewer: $('imageViewer'), viewerImage: $('viewerImage'), toastStack: $('toastStack'),
 };
 
@@ -683,7 +686,7 @@ function updateGenerationDockVisibility(viewName = document.querySelector('.view
 
 function syncViewFromLocation() {
   const requestedView = location.hash.replace('#', '') || 'studio';
-  switchView(['studio', 'ai', 'gallery', 'presets', 'reverse'].includes(requestedView) ? requestedView : 'studio');
+  switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(requestedView) ? requestedView : 'studio');
 }
 
 const sheetFocus = new WeakMap();
@@ -992,56 +995,60 @@ async function startNextGeneration() {
   } catch (error) { finishGeneration(false); toast(error.message || '任务提交失败','error'); }
 }
 
-async function generate() {
-  if (!state.connected) return;
+async function prepareGeneration() {
+  await editorReady;
+  if (!state.connected) throw new Error('请先连接 ComfyUI');
   const settings = collectSettings();
   if (state.img2img.enabled) {
-    if (state.uploadingImg2img) { toast('请等待参考图上传完成', 'error'); return; }
-    if (!state.img2img.image) { toast('请先上传图生图参考图', 'error'); return; }
+    if (state.uploadingImg2img) throw new Error('请等待参考图上传完成');
+    if (!state.img2img.image) throw new Error('请先上传图生图参考图');
     settings.width = state.img2img.width; settings.height = state.img2img.height;
   }
   if (!(settings.mode === 'checkpoint' ? settings.checkpoint : settings.unet)) {
-    toast('请先选择基础模型', 'error'); openParamSheet('model'); return;
+    openParamSheet('model'); throw new Error('请先选择基础模型');
   }
   if (state.pose.enabled && (settings.mode !== 'unet' || !/anima[-_ ]*base[-_ ]*v?1(?:\.0)?/i.test(settings.unet))) {
-    toast('Pose Preview-2 仅匹配 Anima Base v1.0，请检查 UNET', 'error'); openParamSheet('model'); return;
+    openParamSheet('model'); throw new Error('Pose Preview-2 仅匹配 Anima Base v1.0，请检查 UNET');
   }
   if (state.pose.enabled && (!state.poseNodeAvailable || !state.poseRendererAvailable || !state.poseLora)) {
-    toast('缺少 WholeBody-133 渲染器、Pose Preview-2、AnimaControlApply 或 CFGZeroStar', 'error'); return;
+    throw new Error('缺少 WholeBody-133 渲染器、Pose Preview-2、AnimaControlApply 或 CFGZeroStar');
   }
+  if (settings.img2img?.enabled && settings.img2img.repair) {
+    const parts = Array.isArray(settings.img2img.repair) ? settings.img2img.repair : [settings.img2img.repair];
+    if (!parts.length || parts.some(part => !Object.hasOwn(REPAIR_PRESETS,part))) throw new Error('请至少勾选一个修复部位');
+    const [detailer, detector, sam] = await Promise.all(['FaceDetailer','UltralyticsDetectorProvider','SAMLoader'].map(name => api.get('/object_info/' + name)));
+    if (!detailer.FaceDetailer || !detector.UltralyticsDetectorProvider || !sam.SAMLoader) throw new Error('局部修复需要 Impact Pack、Impact Subpack 与 SAMLoader，请先安装并重启 ComfyUI');
+    for (const part of parts) if (!detector.UltralyticsDetectorProvider.input.required.model_name[0].includes(REPAIR_PRESETS[part].detector)) throw new Error('缺少检测模型：' + REPAIR_PRESETS[part].detector);
+    if (!sam.SAMLoader.input.required.model_name[0].includes('sam_vit_b_01ec64.pth')) throw new Error('缺少 SAM 模型：sam_vit_b_01ec64.pth');
+  }
+  if (state.pose.enabled) {
+    const expression = EXPRESSION_TEMPLATES[state.pose.expression];
+    settings.poseControl = {
+      poseJson: officialPoseJson(state.pose.keypoints, state.pose.resolution), strategy: 'official', lora: state.poseLora, strength: state.pose.strength, steps: state.pose.steps, resolution: state.pose.resolution,
+      backgroundPrompt: state.pose.backgroundPrompt || DEFAULT_POSE_BACKGROUND,
+      expressionPrompt: expression?.prompt || '',
+      expressionNegative: expression?.negative || '',
+      template: state.pose.template, expression: state.pose.expression, keypoints: clone(state.pose.keypoints),
+    };
+  }
+  if (settings.cameraControl?.enabled) {
+    const blob = `${settings.prompt}\n${(settings.loraStack || []).map(item => item.name || '').join('\n')}`;
+    if (/panorama|multiple views|character sheet|reference sheet|gpt-image/i.test(blob)) toast('提示词含 panorama 或多视角，或使用了 gpt-image LoRA，竖图容易左右分屏，机位压不住', 'error');
+  }
+  const count = Math.max(1, Math.min(16, Number(settings.batchSize) || 1));
+  const items = [];
+  for (let index = 0; index < count; index++) {
+    const single = {...settings, batchSize:'1', seed:Number(settings.seed) < 0 ? '-1' : String(Number(settings.seed) + index)};
+    const {workflow, seed} = buildWorkflow(single);
+    items.push({workflow, settings:{...single, seed:String(seed)}, status:'waiting'});
+  }
+  return items;
+}
+
+async function generate() {
+  if (!state.connected) return;
   try {
-    if (settings.img2img?.enabled && settings.img2img.repair) {
-      const parts = Array.isArray(settings.img2img.repair) ? settings.img2img.repair : [settings.img2img.repair];
-      if (!parts.length || parts.some(part => !Object.hasOwn(REPAIR_PRESETS,part))) throw new Error('请至少勾选一个修复部位');
-      const [detailer, detector, sam] = await Promise.all(['FaceDetailer','UltralyticsDetectorProvider','SAMLoader'].map(name => api.get('/object_info/' + name)));
-      if (!detailer.FaceDetailer || !detector.UltralyticsDetectorProvider || !sam.SAMLoader) throw new Error('局部修复需要 Impact Pack、Impact Subpack 与 SAMLoader，请先安装并重启 ComfyUI');
-      for (const part of parts) if (!detector.UltralyticsDetectorProvider.input.required.model_name[0].includes(REPAIR_PRESETS[part].detector)) throw new Error('缺少检测模型：' + REPAIR_PRESETS[part].detector);
-      if (!sam.SAMLoader.input.required.model_name[0].includes('sam_vit_b_01ec64.pth')) throw new Error('缺少 SAM 模型：sam_vit_b_01ec64.pth');
-    }
-    if (state.pose.enabled) {
-      const targetSize = { width: Number(settings.width), height: Number(settings.height) };
-      const controlSize = poseControlSize(targetSize.width, targetSize.height, state.pose.resolution);
-      setProgress(0, `正在准备 R0_thin 姿势图 → ${controlSize.width}×${controlSize.height}`);
-      const expression = EXPRESSION_TEMPLATES[state.pose.expression];
-      settings.poseControl = {
-        poseJson: officialPoseJson(state.pose.keypoints, state.pose.resolution), strategy: 'official', lora: state.poseLora, strength: state.pose.strength, steps: state.pose.steps, resolution: state.pose.resolution,
-        backgroundPrompt: state.pose.backgroundPrompt || DEFAULT_POSE_BACKGROUND,
-        expressionPrompt: expression?.prompt || '',
-        expressionNegative: expression?.negative || '',
-        template: state.pose.template, expression: state.pose.expression, keypoints: clone(state.pose.keypoints),
-      };
-    }
-    if (settings.cameraControl?.enabled) {
-      const blob = `${settings.prompt}\n${(settings.loraStack || []).map(item => item.name || '').join('\n')}`;
-      if (/panorama|multiple views|character sheet|reference sheet|gpt-image/i.test(blob)) toast('提示词含 panorama 或多视角，或使用了 gpt-image LoRA，竖图容易左右分屏，机位压不住', 'error');
-    }
-    const count = Math.max(1, Math.min(16, Number(settings.batchSize) || 1));
-    const items = [];
-    for (let index = 0; index < count; index++) {
-      const single = {...settings, batchSize:'1', seed:Number(settings.seed) < 0 ? '-1' : String(Number(settings.seed) + index)};
-      const {workflow, seed} = buildWorkflow(single);
-      items.push({workflow, settings:{...single, seed:String(seed)}, status:'waiting'});
-    }
+    const items = await prepareGeneration();
     generationQueue.push(...items);
     renderQueue();
     syncControls(); scheduleSave();
@@ -1185,6 +1192,7 @@ async function loadAiConfig() {
     const config = await response.json();
     state.aiConfigured = Boolean(config.configured);
     refs.aiModel.value = config.model || '';
+    refs.aiVisionModel.value = config.vision_model || '';
     refs.aiApiBase.value = config.api_base || '';
     refs.aiConfigBadge.textContent = state.aiConfigured ? config.model : '未配置 API Key';
     refs.settingsAi.textContent = state.aiConfigured ? `${config.model} · 配置在本机` : '请填写 API Key 并保存';
@@ -1317,7 +1325,7 @@ function bindEvents() {
   });
   $('saveSettings').addEventListener('click', async () => {
     localStorage.setItem(STORAGE.systemPrompt, refs.systemPrompt.value);
-    const payload = { model: refs.aiModel.value.trim(), api_base: refs.aiApiBase.value.trim() };
+    const payload = { model: refs.aiModel.value.trim(), vision_model: refs.aiVisionModel.value.trim(), api_base: refs.aiApiBase.value.trim() };
     const apiKey = refs.deepseekApiKey.value.trim();
     if (apiKey) payload.api_key = apiKey;
     try {
@@ -1329,7 +1337,7 @@ function bindEvents() {
       refs.deepseekApiKey.value = '';
       await loadAiConfig();
       closeModalSheet(refs.settingsSheet);
-      toast(result.api_key_set ? `${result.model} 已保存到本机 config.yaml` : '设置已保存（API Key 尚未配置）');
+      toast(result.api_key_set ? `${result.model} 已保存到本机 comfy_studio.yaml` : '设置已保存（API Key 尚未配置）');
     } catch (error) {
       toast(error.message, 'error');
     }
@@ -1439,7 +1447,7 @@ function bindEvents() {
   window.addEventListener('message', event => {
     if (event.data?.type === 'comfy-mobile-nav') {
       const view = event.data.view;
-      switchView(['studio', 'ai', 'gallery', 'presets', 'reverse'].includes(view) ? view : 'studio');
+      switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(view) ? view : 'studio');
     }
     if (event.data?.type === 'comfy-mobile-theme') {
       applyTheme(event.data.mode, { resolved: event.data.resolved });
@@ -1495,7 +1503,12 @@ function bindEvents() {
 
 async function init() {
   cameraEditor = new CameraEditor($('cameraControlPanel'), () => scheduleSave());
+  const videoEditor = initVideo(switchView);
   initAgent(async (request, submit) => {
+    if(request.feature==='video') {
+      if(request.prompt && confirm('应用 Agent 建议的视频描述？'))videoEditor.applyPrompt(request.prompt);
+      switchView('video');return;
+    }
     if (request.prompt && confirm('应用 Agent 建议的提示词？')) { refs.prompt.value=request.prompt; syncControls(); scheduleSave(); }
     const feature=request.feature;
     if (['reverse','gallery','presets'].includes(feature)) { switchView(feature); return; }
@@ -1527,7 +1540,15 @@ async function init() {
     }
     if (['models','loras','parameters'].includes(feature)) { $('openAllParams').click(); return; }
     if (feature==='prompt') { $('openPrompt').click(); return; }
+    if (feature==='generation') { switchView('studio'); return; }
   }, async request => {
+    if(request.feature==='video') {
+      if(request.action==='configure')return videoEditor.configure(request.video || {});
+      if(!request.auto_submit)return videoEditor.configure();
+      const changes={...request.video};if(request.prompt!==undefined)changes.prompt=request.prompt;
+      const item=await videoEditor.prepare(changes);
+      return {workflows:[item]};
+    }
     if(['camera','pose'].includes(request.feature)) {
       const source=request.feature==='camera'?cameraEditor.canvas:refs.poseCanvas;
       const preview=document.createElement('canvas'),scale=Math.min(1,768/Math.max(source.width,source.height));
@@ -1539,7 +1560,15 @@ async function init() {
     if(request.feature==='gallery')return {images:loadJson(STORAGE.gallery,[]).slice(0,20).map(item=>({url:item.url,prompt:item.prompt}))};
     if(request.feature==='presets')return {presets:state.presets};
     if(request.feature==='queue')return {tasks:generationQueue.map(item=>({status:item.status,seed:item.settings.seed}))};
-    if(request.feature==='generation') { if(!state.connected)throw new Error('请先连接 ComfyUI'); const before=generationQueue.length;await generate();if(generationQueue.length===before)throw new Error('任务未提交，请检查生成参数');return {submitted:true,completed:false,queued:generationQueue.length-before}; }
+    if(request.feature==='generation') {
+      if(request.auto_submit){
+        if(request.prompt!==undefined)refs.prompt.value=request.prompt;
+        if(request.negative_prompt!==undefined)refs.negPrompt.value=request.negative_prompt;
+        syncControls();scheduleSave();
+      }
+      const items=await prepareGeneration();
+      return {workflows:items.map(({workflow,settings})=>({workflow,settings}))};
+    }
     return {submitted:true,settings:collectSettings()};
   });
   themePreference = normalizeTheme(loadJson(STORAGE.theme, 'system'));
@@ -1556,8 +1585,10 @@ async function init() {
   $('accessAddress').textContent = location.origin;
   renderGallery(); restoreLastCanvas();
 
+  let resolveConnectionReady;
+  const connectionReady = new Promise(resolve => { resolveConnectionReady = resolve; });
   const socket = new ComfySocket(state.clientId, {
-    onStatus: setOnline,
+    onStatus: online => { setOnline(online); resolveConnectionReady(); },
     onPreview: url => { if (state.generating) showImage(url, null, true); },
     onMessage: message => {
       if (!state.generating) return;
@@ -1584,6 +1615,8 @@ async function init() {
   const legacy = localStorage.getItem('comfyui_lite_prompt_from_ai');
   if (legacy) { localStorage.removeItem('comfyui_lite_prompt_from_ai'); applyAiResult(parseAiResult(legacy)); }
   syncViewFromLocation();
+  await connectionReady;
+  resolveEditorReady();
 }
 
 init();

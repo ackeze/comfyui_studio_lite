@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f3ef">
   <title>Comfy Studio Lite</title>
+  <link rel="icon" type="image/svg+xml" href="/api/launcher/assets/brand/logo-mark.svg">
   <script>
     if (new URLSearchParams(location.search).get('embedded') === '1') document.documentElement.classList.add('embedded');
     try {
@@ -24,7 +25,7 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="brand" aria-label="Comfy Studio Lite">
-        <span class="brand-mark"><span></span></span>
+        <span class="brand-mark" aria-hidden="true"></span>
         <div>
           <strong>Comfy Studio Lite</strong>
           <small>个人创作工作室</small>
@@ -242,6 +243,42 @@
         </section>
 
 
+        <section class="view" id="videoView" data-view="video">
+          <div class="video-layout">
+            <div class="video-workspace">
+              <section class="surface video-stage">
+                <div class="section-heading"><h2>视频工作室 <small>MiniMax H3</small></h2><span>24 fps · MP4</span></div>
+                <div class="video-preview" id="videoPreview"><div class="video-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><h3>让画面开始流动</h3><p>描述动作与声音，或从一张图开始。</p></div></div>
+                <p id="videoStatus" role="status">准备开始创作</p>
+              </section>
+              <section class="video-library"><div class="section-heading"><h2>视频作品</h2><span>本机记录</span></div><div id="videoResults" class="video-results"></div></section>
+            </div>
+            <section class="surface video-editor" id="videoEditor">
+              <div class="section-heading"><h2>创作设置</h2><button class="secondary-button" id="videoAskAi" type="button">AI 助手</button></div>
+              <div class="field"><label for="videoMode">生成方式</label><select id="videoMode"><option value="text">文生视频</option><option value="frames">首尾帧生成</option><option value="reference">参考图生成</option></select></div>
+              <div class="field"><label for="videoModel">H3 模型</label><select id="videoModel"></select></div>
+              <div class="video-frame-inputs" id="videoFrameInputs" hidden>
+                <label class="video-upload"><strong>首帧</strong><input id="videoFirst" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上传首帧"><svg class="video-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 12l4-4 4 4M12 8v8"/></svg><img id="videoFirstPreview" alt="首帧预览" hidden><span>点击上传或拖入图片</span><button type="button" data-video-clear="first_frame" title="移除首帧" aria-label="移除首帧" hidden>×</button></label>
+                <label class="video-upload"><strong>尾帧 <small>可选</small></strong><input id="videoLast" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上传尾帧"><svg class="video-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 12l4-4 4 4M12 8v8"/></svg><img id="videoLastPreview" alt="尾帧预览" hidden><span>点击上传或拖入图片</span><button type="button" data-video-clear="last_frame" title="移除尾帧" aria-label="移除尾帧" hidden>×</button></label>
+              </div>
+              <div id="videoReferenceInputs" hidden><label class="video-upload"><strong>参考图 <small>最多 4 张</small></strong><input id="videoReferences" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上传视频参考图" multiple><svg class="video-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 12l4-4 4 4M12 8v8"/></svg><span>点击上传或拖入图片</span></label><div id="videoReferencePreviews" class="video-reference-previews"></div></div>
+              <div class="field"><label for="videoPrompt">视频描述</label><textarea id="videoPrompt" rows="9" placeholder="描述主体、连续动作、运镜与声音。可让 AI 帮你编写 H3 提示词。"></textarea></div>
+              <p class="video-help">沿时间顺序描述动作与收尾，加入环境声或对白。</p>
+              <div class="two-column"><div class="field"><label for="videoRatio">画面比例</label><select id="videoRatio"><option value="1344x768">横屏 16:9 · 1344×768</option><option value="768x1344">竖屏 9:16 · 768×1344</option><option value="768x768">方形 1:1 · 768×768</option><option value="custom">自定义</option></select></div><div class="field"><label for="videoDuration">时长 · 秒</label><input id="videoDuration" type="number" min="2" max="15" step="0.1" value="5"></div></div>
+              <div class="two-column"><div class="field"><label for="videoWidth">宽度</label><input id="videoWidth" type="number" min="256" max="1536" step="32" value="1344"></div><div class="field"><label for="videoHeight">高度</label><input id="videoHeight" type="number" min="256" max="1536" step="32" value="768"></div></div>
+              <p class="video-help" id="videoTiming"></p>
+              <div class="video-toggles"><label><input type="checkbox" id="videoAudio" checked> 生成声音</label><label><input type="checkbox" id="videoTurbo"> Turbo · 8 步</label></div>
+              <div class="two-column"><div class="field"><label for="videoSteps">步数</label><input id="videoSteps" type="number" min="1" max="80" value="30"></div><div class="field"><label for="videoCfg">CFG</label><input id="videoCfg" type="number" min="1" max="10" step="0.1" value="3"></div></div>
+              <div class="field"><label for="videoSeed">种子 · -1 随机</label><input id="videoSeed" type="number" min="-1" max="9007199254740991" step="1" value="-1"></div>
+              <details class="video-advanced"><summary>采样与配套模型</summary>
+                <div class="two-column"><div class="field"><label for="videoSampler">采样器</label><select id="videoSampler"></select></div><div class="field"><label for="videoScheduler">调度器</label><select id="videoScheduler"></select></div></div>
+                <div class="field"><label for="videoClip">文本编码器</label><select id="videoClip"></select></div><div class="field"><label for="videoVae">视频 VAE</label><select id="videoVae"></select></div><div class="field"><label for="videoAudioVae">音频 VAE</label><select id="videoAudioVae"></select></div><div class="field"><label for="videoTurboLora">Turbo LoRA</label><select id="videoTurboLora"></select></div>
+              </details>
+              <button type="button" class="primary-button video-generate" id="videoGenerate">生成视频</button>
+              <p id="videoError" class="video-error" role="alert"></p>
+            </section>
+          </div>
+        </section>
         <section class="view" id="reverseView" data-view="reverse">
           <div class="page-head"><div><span class="eyebrow">IMAGE TO PROMPT · ANIMA</span><h1>提示词反推</h1><p>独立配置图片理解 API，生成适用于 Anima Base 的画质词前缀与英文自然语言描述，并非恢复原始提示词。</p></div></div>
           <div class="reverse-layout"></div>
@@ -331,6 +368,7 @@
     <dialog id="mobileQueueDialog" class="mobile-queue-dialog"><header><h2>生成队列</h2><button type="button" id="closeMobileQueue" aria-label="关闭生成队列">×</button></header><div id="mobileQueueBody"></div></dialog>
     <nav class="bottom-nav" aria-label="主导航">
       <button class="active" type="button" data-nav="studio"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 2-2 5 5"/></svg><span>创作</span></button>
+      <button type="button" data-nav="video"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>视频</span></button>
       <button type="button" data-nav="ai"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg><span>AI</span></button>
       <button type="button" data-nav="gallery"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg><span>图库</span></button>
       <button type="button" data-nav="presets"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4V4Z"/></svg><span>预设</span></button>
@@ -381,7 +419,7 @@
           <section class="settings-category" data-settings-page="ai" hidden>
             <header><h3>AI 服务</h3><p>用于 AI 对话与提示词优化，与图片反推的 API 配置独立。</p></header>
         <div class="setting-row"><span><strong>AI 服务</strong><small id="settingsAi">正在检测</small></span><span class="config-badge" id="settingsAiBadge">检测中</span></div>
-        <label class="field api-key-field">DeepSeek API Key
+        <label class="field api-key-field">AI API Key
           <span class="secret-line">
             <input id="deepseekApiKey" type="password" inputmode="text" autocomplete="off" spellcheck="false" placeholder="sk-…（留空表示不修改）">
             <button id="toggleApiKey" type="button" aria-label="显示 API Key">显示</button>
@@ -389,8 +427,12 @@
           <small>保存到电脑根目录 comfy_studio.yaml，长期生效，手机与网页共用。</small>
         </label>
         <label class="field">AI 模型
-          <input id="aiModel" type="text" autocomplete="off" spellcheck="false" placeholder="deepseek-v4-pro">
-          <small>DeepSeek 模型名，留空恢复默认。</small>
+          <input id="aiModel" type="text" autocomplete="off" spellcheck="false" placeholder="deepseek-flash">
+          <small>填写支持工具调用的模型名，留空恢复默认。</small>
+        </label>
+        <label class="field">图片理解模型（可选）
+          <input id="aiVisionModel" type="text" autocomplete="off" spellcheck="false" placeholder="沿用 AI 模型 / DeepSeek 自动使用 Flash">
+          <small>含图片的对话使用这个模型，需支持图片和工具调用；与 AI 模型共用 API 地址和密钥。DeepSeek 官方接口默认自动使用支持看图的 Flash。</small>
         </label>
         <label class="field">API 地址（可选）
           <input id="aiApiBase" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.deepseek.com">

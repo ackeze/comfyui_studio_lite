@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '../web');
   try {
     const page = await browser.newPage({viewport:{width:1440,height:1000}});
     const errors=[]; page.on('pageerror',error=>errors.push(error.message));
-    await page.addInitScript(() => { window.WebSocket=class {constructor(){setTimeout(()=>this.onopen?.(),10);} close(){}}; });
+    await page.addInitScript(() => { localStorage.setItem('comfy_studio_tutorial_seen_v1','true'); window.WebSocket=class {constructor(){setTimeout(()=>this.onopen?.(),10);} close(){}}; });
     await page.route('**/*', async route => {
       const url = new URL(route.request().url()), p=url.pathname;
       if(p.endsWith('/scene.js')) return route.fulfill({contentType:'text/javascript',body:''});
@@ -22,7 +22,7 @@ const root = path.resolve(__dirname, '../web');
       if(p.endsWith('/KSampler')) return route.fulfill({json:{KSampler:{input:{required:{sampler_name:[['euler']],scheduler:[['simple']]}}}}});
       return route.fulfill({json:{}});
     });
-    await page.goto('http://127.0.0.1:19877/launcher');
+    await page.goto('http://127.0.0.1:19877/launcher#studio');
     const panel=page.locator('#cameraControlPanel');
     await panel.scrollIntoViewIfNeeded();
     assert.equal(await page.locator('.camera-viewport').isVisible(),false);

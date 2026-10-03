@@ -5,6 +5,7 @@ import { initInterrogate } from './interrogate.js';
 import { initAgent } from './agent.js';
 import { initVideo } from './video.js';
 import { initDownloads, requestNativeDownload } from './download.js';
+import { initTutorial } from './tutorial.js';
 
 let cameraEditor;
 let resolveEditorReady;
@@ -676,8 +677,7 @@ function switchView(name) {
   document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === name));
   document.querySelectorAll('[data-nav]').forEach(button => button.classList.toggle('active', button.dataset.nav === name));
   updateGenerationDockVisibility(name);
-  const nextUrl = name === 'studio' ? `${location.pathname}${location.search}` : `#${name}`;
-  history.replaceState(null, '', nextUrl);
+  history.replaceState(null, '', `#${name}`);
   if (name === 'gallery') renderGallery();
   if (name === 'presets') renderPresets();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -688,8 +688,8 @@ function updateGenerationDockVisibility(viewName = document.querySelector('.view
 }
 
 function syncViewFromLocation() {
-  const requestedView = location.hash.replace('#', '') || 'studio';
-  switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(requestedView) ? requestedView : 'studio');
+  const requestedView = location.hash.replace('#', '') || 'ai';
+  switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(requestedView) ? requestedView : 'ai');
 }
 
 const sheetFocus = new WeakMap();
@@ -1443,14 +1443,15 @@ function bindEvents() {
   refs.loraList.addEventListener('change', event => { const card = event.target.closest('[data-lora-index]'); if (card) updateLoraFromCard(card); });
 
   refs.generate.addEventListener('click', generate); refs.desktopGenerate.addEventListener('click', generate); refs.stopGenerate.addEventListener('click', stopGeneration);
-  document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); generate(); } });
+  document.addEventListener('keydown', event => { if (!document.querySelector('dialog[open]') && (event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); generate(); } });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && state.generating) scheduleGenerationCheck(100);
   });
   window.addEventListener('message', event => {
     if (event.data?.type === 'comfy-mobile-nav') {
+      if ($('tutorialDialog').open) return;
       const view = event.data.view;
-      switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(view) ? view : 'studio');
+      switchView(['studio', 'video', 'ai', 'gallery', 'presets', 'reverse'].includes(view) ? view : 'ai');
     }
     if (event.data?.type === 'comfy-mobile-theme') {
       applyTheme(event.data.mode, { resolved: event.data.resolved });
@@ -1587,6 +1588,11 @@ async function init() {
   if (savedSystemPrompt === LEGACY_SYSTEM_PROMPT || savedSystemPrompt === LEGACY_NEXUS_PROMPT) localStorage.setItem(STORAGE.systemPrompt, DEFAULT_SYSTEM_PROMPT);
   $('accessAddress').textContent = location.origin;
   renderGallery(); restoreLastCanvas();
+  syncViewFromLocation();
+  initTutorial(switchView, open => {
+    if (open) { selectSettings('appearance'); openModalSheet(refs.settingsSheet); }
+    else if (refs.settingsSheet.classList.contains('open')) closeModalSheet(refs.settingsSheet);
+  });
 
   let resolveConnectionReady;
   const connectionReady = new Promise(resolve => { resolveConnectionReady = resolve; });
@@ -1617,7 +1623,6 @@ async function init() {
 
   const legacy = localStorage.getItem('comfyui_lite_prompt_from_ai');
   if (legacy) { localStorage.removeItem('comfyui_lite_prompt_from_ai'); applyAiResult(parseAiResult(legacy)); }
-  syncViewFromLocation();
   await connectionReady;
   resolveEditorReady();
 }

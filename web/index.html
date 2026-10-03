@@ -44,7 +44,7 @@
 
     <div class="desktop-layout">
       <main class="main-content">
-        <section class="view active" id="studioView" data-view="studio">
+        <section class="view" id="studioView" data-view="studio">
           <div class="studio-grid">
             <aside class="task-queue" aria-label="生成队列">
               <div class="section-heading"><h2>生成队列 <small id="queueCount">0</small></h2></div>
@@ -283,10 +283,10 @@
           <div class="page-head"><div><span class="eyebrow">IMAGE TO PROMPT · ANIMA</span><h1>提示词反推</h1><p>独立配置图片理解 API，生成适用于 Anima Base 的画质词前缀与英文自然语言描述，并非恢复原始提示词。</p></div></div>
           <div class="reverse-layout"></div>
         </section>
-        <section class="view" id="aiView" data-view="ai">
+        <section class="view active" id="aiView" data-view="ai">
           <div class="page-head">
             <div><span class="eyebrow">CREATIVE AGENT</span><h1>AI 助手</h1><p>用对话完成创作，查看计划、工具进度与操作结果。</p></div>
-            <div class="ai-head-actions"><button class="config-badge" id="editSystemPrompt" type="button">系统提示词</button><button class="config-badge" id="aiConfigBadge" type="button">检查配置中</button></div>
+            <div class="ai-head-actions"><button class="config-badge" id="openTutorial" type="button" aria-haspopup="dialog">页面指南</button><button class="config-badge" id="editSystemPrompt" type="button">系统提示词</button><button class="config-badge" id="aiConfigBadge" type="button">检查配置中</button></div>
           </div>
         </section>
 
@@ -358,7 +358,7 @@
       </aside>
     </div>
 
-    <div class="generation-dock" id="generationDock" aria-live="polite">
+    <div class="generation-dock hidden" id="generationDock" aria-live="polite">
       <button id="mobileQueue" class="mobile-queue-button" type="button" aria-label="打开生成队列" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M3 6h1M3 12h1M3 18h1"/></svg><span id="mobileQueueCount">0</span></button>
       <div class="dock-copy"><span id="dockStatus">准备就绪</span><strong id="dockMeta">1 张 · 768 × 1024</strong></div>
       <button class="stop-button" id="stopGenerate" type="button" hidden>停止</button>
@@ -367,14 +367,23 @@
 
     <dialog id="mobileQueueDialog" class="mobile-queue-dialog"><header><h2>生成队列</h2><button type="button" id="closeMobileQueue" aria-label="关闭生成队列">×</button></header><div id="mobileQueueBody"></div></dialog>
     <nav class="bottom-nav" aria-label="主导航">
-      <button class="active" type="button" data-nav="studio"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 2-2 5 5"/></svg><span>创作</span></button>
+      <button class="active" type="button" data-nav="ai"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg><span>AI</span></button>
+      <button type="button" data-nav="studio"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 2-2 5 5"/></svg><span>创作</span></button>
       <button type="button" data-nav="video"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>视频</span></button>
-      <button type="button" data-nav="ai"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg><span>AI</span></button>
       <button type="button" data-nav="gallery"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg><span>图库</span></button>
       <button type="button" data-nav="presets"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4V4Z"/></svg><span>预设</span></button>
       <button type="button" data-nav="reverse"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM7 15l4-4 3 3 3-4"/></svg><span>反推</span></button>
     </nav>
   </div>
+
+  <dialog id="tutorialDialog" class="tutorial-dialog" aria-labelledby="tutorialTitle" aria-describedby="tutorialText">
+    <div class="tutorial-marker" aria-hidden="true" hidden></div>
+    <section class="tutorial-card">
+      <header><span id="tutorialProgress"></span><button id="tutorialSkip" type="button" aria-label="跳过页面指南">跳过</button></header>
+      <div aria-live="polite" aria-atomic="true"><h2 id="tutorialTitle"></h2><p id="tutorialText"></p></div>
+      <footer><button id="tutorialBack" class="secondary-button" type="button">上一步</button><button id="tutorialNext" class="primary-button" type="button" autofocus>下一步</button></footer>
+    </section>
+  </dialog>
 
   <div class="modal-sheet" id="promptSheet" aria-hidden="true">
     <div class="sheet-backdrop" data-close-prompt></div>

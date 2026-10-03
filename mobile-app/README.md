@@ -13,3 +13,5 @@ cd android
 Windows 执行 `gradlew.bat assembleDebug`，其他系统执行 `./gradlew assembleDebug`。APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`。首次构建需安装 Gradle 配置所指定的依赖；`android/local.properties` 配置本机 SDK 路径，不上传此文件。
 
 手机需安装新版 APK，同时电脑更新插件网页。视频从当前连接的工作台流式保存；本地 Blob 导出文件上限 32 MiB。
+
+1.0 发布版默认进入 AI 助手，并将 AI 放在导航第一位；首次页面指南跟随电脑端插件逐页展示。

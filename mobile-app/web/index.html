@@ -386,7 +386,7 @@
         <div class="connect-meta"><span>支持 HTTP / HTTPS</span><span class="error" id="connectError">无法连接，请检查地址与网络</span></div>
       </div>
     </section>
-    <footer class="setup-foot"><span><strong>COMFY STUDIO</strong><br>Mobile interface</span><span>v1.0.1<br>Local first</span></footer>
+    <footer class="setup-foot"><span><strong>COMFY STUDIO</strong><br>Mobile interface</span><span>v1.0<br>Local first</span></footer>
   </main>
 
   <main class="app" id="mainApp">
@@ -441,23 +441,23 @@
     </section>
 
     <nav class="nav" aria-label="主导航">
-      <button class="nav-item active" type="button" data-tab="gen">
-        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V8l7-4 7 4v11M5 12h14M9 19v-4h6v4"/></svg><span class="nav-label">创作</span>
-      </button>
-      <button class="nav-item" type="button" data-tab="ai">
+      <button class="nav-item active" type="button" data-tab="ai">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v10H9l-4 3V6Z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg><span class="nav-label">AI 助手</span>
+      </button>
+      <button class="nav-item" type="button" data-tab="gen">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V8l7-4 7 4v11M5 12h14M9 19v-4h6v4"/></svg><span class="nav-label">创作</span>
       </button>
       <button class="nav-item" type="button" data-tab="video">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span class="nav-label">视频</span>
-      </button>
-      <button class="nav-item" type="button" data-tab="reverse">
-        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM7 15l4-4 3 3 3-4"/></svg><span class="nav-label">反推</span>
       </button>
       <button class="nav-item" type="button" data-tab="gallery">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg><span class="nav-label">图库</span>
       </button>
       <button class="nav-item" type="button" data-tab="presets">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></svg><span class="nav-label">预设</span>
+      </button>
+      <button class="nav-item" type="button" data-tab="reverse">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM7 15l4-4 3 3 3-4"/></svg><span class="nav-label">反推</span>
       </button>
       <button class="nav-item" type="button" data-tab="settings">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 8 7.1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1A8 8 0 0 0 10.4 18l.3 2.6h4L15 18a8 8 0 0 0 1.6-1.1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1Z"/></svg><span class="nav-label">设置</span>
@@ -470,7 +470,7 @@
       var SERVER_KEY = 'comfyui_server';
       var THEME_KEY = 'comfyui_theme';
       var serverUrl = '';
-      var currentTab = 'gen';
+      var currentTab = 'ai';
       var themeMode = localStorage.getItem(THEME_KEY) || 'system';
       var timer = null;
       var checkPromise = null;
@@ -612,6 +612,8 @@
       }
 
       $('mainFrame').addEventListener('load', function () {
+        document.querySelectorAll('.nav-item').forEach(function (item) { item.disabled = false; });
+        if (serverUrl && this.contentWindow) this.contentWindow.postMessage({ type: 'comfy-mobile-tutorial-check' }, new URL(serverUrl).origin);
         var downloads = window.Capacitor?.Plugins?.StudioDownloads;
         if (serverUrl && downloads && this.contentWindow) this.contentWindow.postMessage({ type: 'comfy-mobile-download-ready' }, new URL(serverUrl).origin);
         if (!serverUrl || currentTab === 'settings') return;
@@ -628,6 +630,16 @@
       });
       var downloadQueue = Promise.resolve();
       window.addEventListener('message', function (event) {
+        if (serverUrl && event.source === $('mainFrame').contentWindow && event.origin === new URL(serverUrl).origin && event.data?.type === 'comfy-mobile-tutorial') {
+          var tab = event.data.view === 'studio' ? 'gen' : event.data.view;
+          if (!['ai', 'gen', 'video', 'gallery', 'presets', 'reverse', 'settings'].includes(tab) || typeof event.data.active !== 'boolean') return;
+          currentTab = tab;
+          document.querySelectorAll('.nav-item').forEach(function (item) {
+            item.classList.toggle('active', item.dataset.tab === tab);
+            item.disabled = event.data.active;
+          });
+          return;
+        }
         var frame = $('mainFrame');
         if (!serverUrl || event.source !== frame.contentWindow || event.origin !== new URL(serverUrl).origin) return;
         var downloads = window.Capacitor?.Plugins?.StudioDownloads;
@@ -777,7 +789,8 @@
         if (timer) clearInterval(timer);
         $('mainFrame').src = 'about:blank';
         delete $('mainFrame').dataset.server;
-        currentTab = 'gen';
+        currentTab = 'ai';
+        document.querySelectorAll('.nav-item').forEach(function (item) { item.disabled = false; });
         showSetup();
       });
       document.querySelectorAll('.nav-item').forEach(function (item) {

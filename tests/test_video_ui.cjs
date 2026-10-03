@@ -11,7 +11,7 @@ const root=path.resolve(__dirname,'../web');
     let session=null,history={},uploadCount=0,pendingOverrides={},sessionNumber=0;
     const cancelled=new Set(),queueActions=[];
     page.on('pageerror',error=>errors.push(error.message));
-    await page.addInitScript(()=>{window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)}close(){}};});
+    await page.addInitScript(()=>{localStorage.setItem('comfy_studio_tutorial_seen_v1','true');window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)}close(){}};});
     await page.route('**/*',async route=>{
       const request=route.request(),p=new URL(request.url()).pathname;
       if(p.startsWith('/api/launcher/assets/'))return route.fulfill({path:path.join(root,p.replace('/api/launcher/',''))});
@@ -88,7 +88,9 @@ const root=path.resolve(__dirname,'../web');
     await page.locator('#videoTurbo').check();await page.locator('#videoAudio').uncheck();
     assert.equal(await page.locator('#videoSteps').inputValue(),'8');assert.equal(await page.locator('#videoCfg').inputValue(),'1');
     await page.locator('[data-nav="ai"]').click();
+    const firstAgentSubmit=page.waitForResponse(response=>response.url().endsWith('/submit')&&response.request().method()==='POST');
     await page.locator('.agent-compose > textarea').fill('按视频编辑器生成');await page.locator('[data-action="start"]').click();
+    await firstAgentSubmit;
     await page.waitForFunction(()=>document.querySelector('.agent-panel').dataset.status==='done');
     assert.equal(submissions.length,1);assert.equal(manual.length,1,'AI submits through the backend exactly once');
     const ai=submissions[0].result.workflows[0].settings;

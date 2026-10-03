@@ -10,6 +10,7 @@ const workspace=path.resolve(__dirname,'../../..');
  const page=await browser.newPage({viewport:{width:1600,height:1000}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
+   localStorage.setItem('comfy_studio_tutorial_seen_v1','true');
    window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)} close(){}};
  });
  await page.route('**/*',async route=>{
@@ -23,7 +24,7 @@ const workspace=path.resolve(__dirname,'../../..');
   if(p.endsWith('/CLIPLoader'))return route.fulfill({json:{CLIPLoader:{input:{required:{type:[['anima']]}}}}});
   return route.fulfill({json:{}});
  });
- await page.goto('http://127.0.0.1:19877/launcher');
+ await page.goto('http://127.0.0.1:19877/launcher#studio');
  await page.locator('#studioPrompt').fill('white hair, blue eyes, pink dress');
  await page.waitForTimeout(350);
  assert.equal(await page.locator('#prompt').inputValue(),'white hair, blue eyes, pink dress');
@@ -153,7 +154,7 @@ const workspace=path.resolve(__dirname,'../../..');
  assert.equal(await page.evaluate(()=>{const ids=[...document.querySelectorAll('[id]')].map(e=>e.id);return ids.length===new Set(ids).size}),true);
  for(const viewport of [{width:390,height:844},{width:768,height:430}]){
   await page.setViewportSize(viewport);
-  await page.goto('http://127.0.0.1:19877/launcher?embedded=1');
+  await page.goto('http://127.0.0.1:19877/launcher?embedded=1#studio');
   assert.equal(await page.locator('.bottom-nav').isVisible(),false);
   await page.waitForTimeout(350);
   assert.equal(await page.locator('.task-queue').isVisible(),false);

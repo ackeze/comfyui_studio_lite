@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'../web');
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
-  await page.addInitScript(()=>{window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)}close(){}};});
+  await page.addInitScript(()=>{localStorage.setItem('comfy_studio_tutorial_seen_v1','true');window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)}close(){}};});
   let feature='camera',editAction='edit',submitted,state,posted,forked,branchNumber=0;
   let aiConfig={configured:true,model:'deepseek-v4-pro',api_base:'https://api.deepseek.com',vision_model:''},savedSettings;
   const sessions=new Map();

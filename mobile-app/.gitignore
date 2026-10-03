@@ -1,9 +1,0 @@
-node_modules/
-.idea/
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/app/src/main/assets/
-android/capacitor-cordova-android-plugins/
-*.apk

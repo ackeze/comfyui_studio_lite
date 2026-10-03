@@ -1,10 +1,36 @@
 # Comfy Studio Lite
 
-ComfyUI 自定义节点。安装后打开 `/launcher`，在电脑或同一局域网的手机上使用 Anima 生图、MiniMax H3 视频生成、场景、Pose、反推和 Agent。
+![Comfy Studio Lite · 灵感开口，作品到手](docs/media/01-cover.png)
+
+ComfyUI 的轻量创作工作台。安装后打开 `/launcher`，通过 AI 对话完成创作，或在电脑与同一局域网的手机上生成图片、视频。
 
 需要 **ComfyUI 0.33.x+**（使用 `/api` 前缀路由）。
 
 默认打开 AI 助手，首次进入会显示简短的逐页指南；可跳过，也可从 AI 页的「页面指南」重新打开。
+
+## 从需求到作品
+
+- **AI 助手**：图文对话、按需调用工具、沿用编辑器设置提交生成；消息支持复制、编辑、重试和分支。
+- **创作工作台**：Anima 生图、MiniMax H3 视频生成，配合图库、预设和图片反推。
+- **手机协作**：同一局域网连接电脑工作台，查看任务和作品，保存生成结果。
+
+![AI 助手 · 说出想法，交给 AI](docs/media/02-ai-assistant.png)
+
+## 界面实景
+
+AI 助手默认首页：
+
+![Comfy Studio Lite AI 工作台真实界面](docs/media/ai-workspace.png)
+
+## Android 1.0
+
+![局域网手机协作 · 手机一连，创作随身](docs/media/03-mobile-collaboration.png)
+
+[下载 Android 安装包](https://github.com/ackeze/comfyui_studio_lite/releases/download/v1.0/ComfyStudioLite-1.0.apk) · [查看发布页](https://github.com/ackeze/comfyui_studio_lite/releases/tag/v1.0)
+
+支持 Android 5.1 及以上。安装 APK 后，在电脑启动 ComfyUI，手机与电脑连接同一局域网，通过自动发现或手动输入地址连接。首次进入会显示逐页指南。
+
+图片、视频、对话和场景导出通过系统保存窗口选择位置。视频从电脑工作台下载，本地导出文件上限 32 MiB。使用时需保持电脑端 ComfyUI 运行，并更新插件网页。
 
 ## 安装
 
@@ -58,8 +84,6 @@ netsh advfirewall firewall add rule name="Comfy Studio Lite LAN" dir=in action=a
 AI 会按需加载和调用工具，读取每一步的结果后再继续；普通聊天不会自动检查所有模型或依赖。
 
 可说「检查自动安装的问题，给我修复差异」：助手在后端固定的 ComfyUI 根目录内查看文件、搜索代码和读取日志，再提出小范围修改。点击「确认修改」后才写入，文件若已被手动改动则拒绝覆盖。写入前保存备份到根目录 `.comfy_studio_maintenance`，可说「撤销刚才的修改」，审核撤销差异后确认。代码修改需要重启 ComfyUI 并检查实际运行结果。文件工具不访问凭据、会话、目录链接或模型二进制内容；依赖安装和模型下载仍使用现有安装工具。
-
-Android App 1.0.1 支持原生文件保存：图片、视频、对话和场景导出通过系统保存窗口选择位置。视频从当前工作台流式下载，本地导出文件上限 32 MiB；取消保存不会显示成功。需要安装新版 APK，同时更新工作台网页。
 
 AI 支持图文对话：可粘贴、拖入或选择最多 4 张图片，消息保留可放大的缩略图。需要点评生成结果时，助手通过 `view_images` 按需读取本地图片。设置中的「图片理解模型」可指定同一 API 下支持图片和工具调用的模型；留空沿用 AI 模型，DeepSeek 官方接口的含图对话自动使用 `deepseek-flash`。其他服务需配置支持看图的模型。
 

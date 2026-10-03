@@ -7,3 +7,6 @@ ai_key.txt
 /promo/
 /.comfy_studio_maintenance/
 .pytest_cache/
+/mobile-app/
+/mobile_app/
+*.apk

@@ -1,0 +1,23 @@
+{
+  "appId": "com.comfyui.lite",
+  "appName": "Comfy Studio Lite",
+  "webDir": "web",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 1500,
+      "backgroundColor": "#f7f7f4",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#f7f7f4"
+    }
+  }
+}

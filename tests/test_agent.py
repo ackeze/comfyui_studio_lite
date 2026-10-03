@@ -898,5 +898,103 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.payloads), 12)
         self.assertEqual(self.generations, [])
 
+    async def project_proposal(self):
+        root = Path(self.directory.name)
+        self.agent.studio_install.find_comfy_root = lambda: root
+        target = root / 'settings.json'
+        target.write_text('{"steps":1}\n', encoding='utf-8')
+        self.discover('project_read', 'prepare_project_edit')
+        self.call('project_read', {'path': 'settings.json'}, 'read_file')
+        self.call('prepare_project_edit', {'reason': '调整配置', 'changes': [{'path': 'settings.json', 'old_text': '1', 'new_text': '2'}]}, 'edit_file')
+        created = await self.client.post('/launcher/agent/sessions', json={'text': '检查并修复配置'})
+        identity = (await created.json())['id']
+        state = await self.wait_state(identity, 'waiting')
+        return identity, state, target
+
+    async def test_project_edit_uses_server_plan_and_requires_explicit_confirmation(self):
+        identity, state, target = await self.project_proposal()
+        self.assertEqual(target.read_text(), '{"steps":1}\n')
+        self.assertEqual(state['pending']['feature'], 'project_edit')
+        self.assertNotIn('plan', state['pending'])
+        self.assertIn('-{"steps":1}', state['pending']['instruction'])
+        for result in ({'approved': 1}, {'approved': True, 'plan': {'files': []}}, {}, {'changed': True}):
+            response = await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': result})
+            self.assertEqual(response.status, 400)
+            self.assertEqual(target.read_text(), '{"steps":1}\n')
+        self.replies.append({'role': 'assistant', 'content': '文件已写入，请重启后验证。'})
+        response = await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'approved': True}, 'plan': {'files': []}})
+        self.assertEqual(response.status, 200)
+        state = await self.wait_state(identity, 'done')
+        self.assertEqual(target.read_text(), '{"steps":2}\n')
+        event = next(event for event in state['events'] if event.get('id') == 'edit_file')
+        self.assertTrue(event['result']['ok'])
+        self.assertEqual(len(event['result']['record_id']), 32)
+        repeated = await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'approved': True}})
+        self.assertEqual(repeated.status, 409)
+
+    async def test_project_cancellation_and_conflict_do_not_overwrite(self):
+        identity, _, target = await self.project_proposal()
+        self.replies.append({'role': 'assistant', 'content': '已取消，没有修改文件。'})
+        await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'cancelled': True}})
+        state = await self.wait_state(identity, 'done')
+        self.assertEqual(target.read_text(), '{"steps":1}\n')
+        self.assertTrue(next(event for event in state['events'] if event.get('id') == 'edit_file')['result']['cancelled'])
+        identity, _, target = await self.project_proposal()
+        target.write_text('{"steps":3}\n', encoding='utf-8')
+        self.replies.append({'role': 'assistant', 'content': '检测到手动修改，需重新读取。'})
+        await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'approved': True}})
+        state = await self.wait_state(identity, 'done')
+        self.assertEqual(target.read_text(), '{"steps":3}\n')
+        event = next(event for event in state['events'] if event.get('id') == 'edit_file')
+        self.assertEqual(event['status'], 'error')
+        self.assertIn('已改变', event['result']['message'])
+
+    async def test_project_undo_waits_then_restores(self):
+        identity, _, target = await self.project_proposal()
+        self.replies.append({'role': 'assistant', 'content': '已修改'})
+        await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'approved': True}})
+        state = await self.wait_state(identity, 'done')
+        record_id = next(event for event in state['events'] if event.get('id') == 'edit_file')['result']['record_id']
+        self.discover('prepare_project_undo')
+        self.call('prepare_project_undo', {'record_id': record_id}, 'undo_file')
+        await self.client.post(f'/launcher/agent/sessions/{identity}/messages', json={'text': '撤销刚才的修改'})
+        state = await self.wait_state(identity, 'waiting')
+        self.assertEqual(state['pending']['action'], 'undo')
+        self.assertEqual(target.read_text(), '{"steps":2}\n')
+        self.replies.append({'role': 'assistant', 'content': '已撤销'})
+        await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'undo_file', 'result': {'approved': True}})
+        await self.wait_state(identity, 'done')
+        self.assertEqual(target.read_text(), '{"steps":1}\n')
+
+    async def test_project_tools_cannot_expand_scope_or_read_secrets(self):
+        root = Path(self.directory.name)
+        self.agent.studio_install.find_comfy_root = lambda: root
+        (root / 'ai_key.txt').write_text('SECRET_NEVER_SEND', encoding='utf-8')
+        self.discover('project_read')
+        self.call('project_read', {'path': '../secret.py'}, 'outside')
+        self.call('project_read', {'path': 'ai_key.txt'}, 'secret')
+        self.call('project_read', {'path': 'settings.json', 'root': 'D:/'}, 'expanded')
+        self.replies.append({'role': 'assistant', 'content': '这些路径不允许访问'})
+        response = await self.client.post('/launcher/agent/sessions', json={'text': '检查目录'})
+        state = await self.wait_state((await response.json())['id'], 'done')
+        self.assertTrue(all(event['status'] == 'error' for event in state['events'] if event.get('id') in ('outside', 'secret', 'expanded')))
+        self.assertNotIn('SECRET_NEVER_SEND', json.dumps(self.payloads))
+
+    async def test_project_pending_survives_backend_restart(self):
+        identity, _, target = await self.project_proposal()
+        await self.client.close()
+        routes = web.RouteTableDef()
+        self.agent.install_agent(routes, lambda: self.config, lambda: 'sk-test-private-123')
+        app = web.Application()
+        app.add_routes(routes)
+        self.client = TestClient(TestServer(app))
+        await self.client.start_server()
+        state = await self.wait_state(identity, 'waiting')
+        self.assertNotIn('plan', state['pending'])
+        self.replies.append({'role': 'assistant', 'content': '已确认并写入'})
+        await self.client.post(f'/launcher/agent/sessions/{identity}/submit', json={'id': 'edit_file', 'result': {'approved': True}})
+        await self.wait_state(identity, 'done')
+        self.assertEqual(target.read_text(), '{"steps":2}\n')
+
 if __name__ == '__main__':
     unittest.main()

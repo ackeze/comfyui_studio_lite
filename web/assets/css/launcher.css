@@ -856,6 +856,10 @@ html.embedded .stage-card { top:0; }
 .agent-pending { flex-shrink:0; max-height:32dvh; overflow:auto; margin:0 0 14px; padding:16px; border:1px solid var(--line-strong); border-radius:16px; background:var(--accent-soft); animation:agent-enter .3s var(--ease); }
 .agent-pending:empty { display:none; }
 .agent-pending button { margin:10px 6px 0 0; min-height:42px; }
+.agent-pending.agent-pending-edit { display:flex; flex-direction:column; max-height:44dvh; overflow:hidden; gap:12px; }
+.agent-pending-edit > .agent-markdown { min-height:0; overflow:auto; }
+.agent-pending-actions { display:flex; flex-wrap:wrap; gap:8px; flex-shrink:0; }
+.agent-pending-actions > button { margin:0; }
 .agent-markdown { min-width:0; white-space:normal; font-size:14px; line-height:1.85; overflow-wrap:anywhere; }
 .agent-markdown > :first-child { margin-top:0; }
 .agent-markdown > :last-child { margin-bottom:0; }

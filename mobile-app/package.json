@@ -1,0 +1,21 @@
+{
+  "name": "comfyui-lite-app",
+  "version": "1.0.0",
+  "description": "ComfyUI Lite Android App",
+  "main": "index.js",
+  "scripts": {
+    "build": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/keyboard": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

@@ -2,6 +2,7 @@ const {chromium}=require('C:/Users/acke/.cache/codex-runtimes/codex-primary-runt
 const assert=require('node:assert/strict');
 const path=require('node:path');
 const fs=require('node:fs');
+const TINY_PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
 const root=path.resolve(__dirname,'../web');
 (async()=>{
   const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
@@ -44,7 +45,7 @@ const root=path.resolve(__dirname,'../web');
       if(p==='/launcher/agent/sessions')return route.fulfill({json:{sessions:session?[{id:session.id,title:'视频生成'}]:[]}});
       if(p.startsWith('/launcher/agent/sessions/'))return route.fulfill({json:session});
       if(p==='/view'||p==='/api/view'){
-        if(new URL(request.url()).searchParams.get('type')==='input')return route.fulfill({path:path.resolve(root,'../promo/video/assets/art-daylight.png')});
+        if(new URL(request.url()).searchParams.get('type')==='input')return route.fulfill({body:TINY_PNG,contentType:'image/png'});
         if(process.env.STUDIO_VIDEO_PREVIEW){
           const media=fs.readFileSync(process.env.STUDIO_VIDEO_PREVIEW),range=request.headers().range?.match(/bytes=(\d+)-(\d*)/);
           if(range){const start=Number(range[1]),end=range[2]?Number(range[2]):media.length-1;return route.fulfill({status:206,contentType:'video/mp4',headers:{'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${media.length}`},body:media.subarray(start,end+1)});}

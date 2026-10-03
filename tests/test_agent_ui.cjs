@@ -9,7 +9,7 @@ const root=path.resolve(__dirname,'../web');
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(()=>{window.WebSocket=class{constructor(){setTimeout(()=>this.onopen?.(),20)}close(){}};});
-  let feature='camera',submitted,state,posted,forked,branchNumber=0;
+  let feature='camera',editAction='edit',submitted,state,posted,forked,branchNumber=0;
   let aiConfig={configured:true,model:'deepseek-v4-pro',api_base:'https://api.deepseek.com',vision_model:''},savedSettings;
   const sessions=new Map();
   const markdown=['## 创作方案','使用 **Anima**，保留 *柔和光线* 与 `1024 × 768`。','','- 检查模型','- 填写提示词','  - 保留用户设置','','> 调整完成后即可继续。','','| 项目 | 参数 |','| --- | --- |','| 步数 | 30 |','| CFG | 4 |','','```json','{ "prompt": "A peaceful afternoon", "width": 1024 }','```','','[官方说明](https://example.com/guide)','[危险链接](javascript:alert(1))','<img src=x onerror="window.markdownUnsafe=true">'].join('\n');
@@ -22,7 +22,8 @@ const root=path.resolve(__dirname,'../web');
    if(p==='/api/upload/image')return route.fulfill({json:{name:'chat-original.png',subfolder:'comfy_studio_agent',type:'input'}});
    if(p==='/launcher/agent/sessions' && request.method()==='POST'){
     posted=request.postDataJSON();
-    state={id:'test',status:'waiting',events:[{type:'user',text:posted.text,message_index:1}],pending:{id:'call',feature,instruction:'调整并提交'}};sessions.set('test',state);
+    const instruction=feature==='project_edit'?'修复配置读取逻辑\n\n确认修改 1 个文件（根目录：D:\\AI\\ComfyUI-aki-v1.4）。\n\n````diff\n--- a/custom_nodes/aki_launcher/install.py\n+++ b/custom_nodes/aki_launcher/install.py\n@@ -1,2 +1,2 @@\n-value = 1\n+value = 2\n <img src=x onerror="window.diffUnsafe=true">\n ```\n````\n\n确认前不会写入。':'调整并提交';
+    state={id:'test',status:'waiting',events:[{type:'user',text:posted.text,message_index:1}],pending:{id:'call',feature,action:editAction,instruction}};sessions.set('test',state);
     return route.fulfill({json:state});
    }
    if(p==='/launcher/agent/sessions/test/messages' && request.method()==='POST'){
@@ -240,7 +241,37 @@ const root=path.resolve(__dirname,'../web');
   await page.getByRole('button',{name:'重试回复',exact:true}).click();
   await page.waitForFunction(()=>localStorage.getItem('comfy_agent_session')==='branch-5');
   assert.equal(forked.action,'retry');assert.equal(forked.message_index,undefined);
+  feature='project_edit';
+  for(editAction of ['edit','undo']){
+   await page.getByRole('button',{name:'新建会话',exact:true}).click();
+   await page.locator('.agent-compose > textarea').fill(editAction==='edit'?'检查自动安装并提议修复':'撤销上一次修复');
+   await page.locator('.agent-panel [data-action="start"]').click();
+   const confirm=page.getByRole('button',{name:editAction==='edit'?'确认修改':'确认撤销',exact:true});
+   await confirm.waitFor({state:'visible'});
+   assert.equal(await page.getByRole('button',{name:'打开编辑器',exact:true}).count(),0);
+   assert.ok((await page.locator('.agent-pending code').textContent()).includes('+value = 2'));
+   assert.ok((await page.locator('.agent-pending code').textContent()).includes('```'));
+   assert.equal(await page.locator('.agent-pending img,.agent-pending script').count(),0);
+   assert.equal(await page.evaluate(()=>window.diffUnsafe),undefined);
+   for(const width of [390,1280]){
+    await page.setViewportSize({width,height:900});
+    await page.locator('.agent-pending').evaluate(async node=>{await Promise.all(node.getAnimations({subtree:true}).map(animation=>animation.finished));});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Diff confirmation must fit mobile and desktop');
+    const visible=await confirm.evaluate(button=>{const a=button.getBoundingClientRect(),b=button.closest('.agent-pending').getBoundingClientRect();return a.top>=b.top&&a.bottom<=b.bottom;});
+    assert.ok(visible,'Approval stays visible while the diff scrolls');
+   }
+   if(editAction==='edit')await page.screenshot({path:path.resolve(__dirname,'../../../output/project-agent-confirmation.png'),fullPage:true});
+   await confirm.click();
+   await page.waitForFunction(()=>!document.querySelector('.agent-pending button'));
+   assert.deepEqual(submitted,{id:'call',result:{approved:true}});
+  }
+  await page.getByRole('button',{name:'新建会话',exact:true}).click();
+  await page.locator('.agent-compose > textarea').fill('取消修复');
+  await page.locator('.agent-panel [data-action="start"]').click();
+  await page.getByRole('button',{name:'取消此操作',exact:true}).click();
+  await page.waitForFunction(()=>!document.querySelector('.agent-pending button'));
+  assert.deepEqual(submitted,{id:'call',result:{cancelled:true}});
   assert.deepEqual(errors,[]);
-  console.log('PASS: Agent editors, Markdown, XSS blocking, themes, mobile, dropped images, image viewer, message copy/edit/retry, independent branches, LAN copy and reload persistence');
+  console.log('PASS: Agent editors, Markdown, XSS blocking, themes, mobile, dropped images, image viewer, message copy/edit/retry, independent branches, LAN copy, reload persistence, project diff approval/undo/cancellation');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

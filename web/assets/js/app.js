@@ -4,6 +4,7 @@ import { REPAIR_PRESETS } from './repair.js';
 import { initInterrogate } from './interrogate.js';
 import { initAgent } from './agent.js';
 import { initVideo } from './video.js';
+import { initDownloads, requestNativeDownload } from './download.js';
 
 let cameraEditor;
 let resolveEditorReady;
@@ -216,7 +217,9 @@ const refs = {
 
 async function downloadImage(url, filename = 'comfyui_image.png') {
   try {
+    if(requestNativeDownload(url,filename))return;
     const response = await fetch(url);
+    if(!response.ok)throw new Error(`请求失败 (${response.status})`);
     const blob = await response.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -224,8 +227,8 @@ async function downloadImage(url, filename = 'comfyui_image.png') {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-    toast('图片已下载');
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    toast('下载已发起');
   } catch (err) {
     toast('下载失败: ' + err.message, 'error');
   }
@@ -1619,4 +1622,5 @@ async function init() {
   resolveEditorReady();
 }
 
+initDownloads((message,error)=>toast(message,error?'error':''));
 init();

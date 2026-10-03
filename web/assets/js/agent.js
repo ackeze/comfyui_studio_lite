@@ -1,4 +1,5 @@
 import { renderMarkdown } from './markdown.js';
+import { requestNativeDownload } from './download.js';
 
 const messageIcons={
   copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
@@ -279,17 +280,20 @@ export function initAgent(editor, snapshot) {
     reset.disabled=messageBusy||['running','waiting'].includes(session.status);
     if(pending.dataset.id!==(session.pending?.id || '')){
       pending.replaceChildren();pending.dataset.id=session.pending?.id || '';
+      pending.classList.toggle('agent-pending-edit',session.pending?.feature==='project_edit');
       if(session.pending){
-        const request=session.pending,download=request.feature==='download'||request.feature==='studio_install';
+        const request=session.pending,download=request.feature==='download'||request.feature==='studio_install',fileEdit=request.feature==='project_edit';
         const text=document.createElement('div');renderMarkdown(text,request.instruction || '请确认操作');pending.append(text);
         const actions=[];
         const submit=async()=>{const result=await capture(request);show(await api('/'+identity+'/submit',{id:request.id,result}));poll();};
-        if(!download)actions.push(['打开编辑器',()=>editor(request,submit)]);
-        actions.push([download?'确认下载':request.feature==='generation'?'提交生成':request.feature==='video'?'提交设置':'提交给 AI',async()=>{
-          const result=download?{approved:true}:await capture(request);
+        if(!download&&!fileEdit)actions.push(['打开编辑器',()=>editor(request,submit)]);
+        actions.push([fileEdit?(request.action==='undo'?'确认撤销':'确认修改'):download?'确认下载':request.feature==='generation'?'提交生成':request.feature==='video'?'提交设置':'提交给 AI',async()=>{
+          const result=download||fileEdit?{approved:true}:await capture(request);
           show(await api('/'+identity+'/submit',{id:request.id,result}));poll();
         }],['取消此操作',async()=>{show(await api('/'+identity+'/submit',{id:request.id,result:{cancelled:true}}));poll();}]);
-        for(const [label,action] of actions){const b=document.createElement('button');b.className='secondary-button';b.type='button';b.textContent=label;b.onclick=async()=>{for(const button of pending.querySelectorAll('button'))button.disabled=true;try{await action();}catch(error){setNote(error.message,8000);}finally{for(const button of pending.querySelectorAll('button'))button.disabled=false;}};pending.append(b);}
+        const actionHost=fileEdit?document.createElement('div'):pending;
+        if(fileEdit){actionHost.className='agent-pending-actions';pending.append(actionHost);}
+        for(const [label,action] of actions){const b=document.createElement('button');b.className=fileEdit&&label.startsWith('确认')?'primary-button':'secondary-button';b.type='button';b.textContent=label;b.onclick=async()=>{for(const button of pending.querySelectorAll('button'))button.disabled=true;try{await action();}catch(error){setNote(error.message,8000);}finally{for(const button of pending.querySelectorAll('button'))button.disabled=false;}};actionHost.append(b);}
       }
     }
     if(session.pending?.auto_submit){
@@ -424,7 +428,9 @@ export function initAgent(editor, snapshot) {
     else if(action==='download'){
       button.disabled=true;
       try{
+        if(requestNativeDownload(viewerImage.src,viewerName.textContent || 'comfyui.png'))return;
         const response=await fetch(viewerImage.src);
+        if(!response.ok)throw new Error('请求失败 ('+response.status+')');
         const blob=await response.blob();
         const link=document.createElement('a');
         link.href=URL.createObjectURL(blob);link.download=viewerName.textContent || 'comfyui.png';
